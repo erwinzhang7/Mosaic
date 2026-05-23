@@ -48,14 +48,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Hotkey
 
+    /// Install the persisted summon hotkey on launch. If the saved combo
+    /// can't be registered (taken by another app since it was set), fall back
+    /// to the default. If the default also fails, leave the hotkey unset —
+    /// the user can pick a different one in Settings.
     private func installHotKey() {
-        // Default summon: ⌃⌥Space. Cmd-Space is Spotlight; F4 is wired in step 9.
-        HotKeyManager.shared.install(
-            keyCode: UInt32(kVK_Space),
-            modifiers: UInt32(controlKey | optionKey)
-        ) { [weak self] in
-            self?.toggleOverlay()
+        let saved = LayoutStore.shared.state.summonHotKey
+        if HotKeyManager.shared.install(
+            keyCode: saved.keyCode,
+            modifiers: saved.modifiers,
+            action: { [weak self] in self?.toggleOverlay() }
+        ) { return }
+
+        if saved != .default {
+            NSLog("Mosaic: saved summon hotkey unavailable, falling back to ⌃⌥Space")
+            let fallback = HotKeyBinding.default
+            if HotKeyManager.shared.install(
+                keyCode: fallback.keyCode,
+                modifiers: fallback.modifiers,
+                action: { [weak self] in self?.toggleOverlay() }
+            ) { return }
         }
+
+        NSLog("Mosaic: no summon hotkey active; set one in Settings")
+    }
+
+    /// Live-rebind the summon hotkey. Returns `nil` on success, or a
+    /// user-facing error string on failure (in which case the previously
+    /// registered hotkey is still active — see HotKeyManager.install).
+    /// Called by the Settings shortcut recorder.
+    @discardableResult
+    func applyHotKey(_ binding: HotKeyBinding) -> String? {
+        let ok = HotKeyManager.shared.install(
+            keyCode: binding.keyCode,
+            modifiers: binding.modifiers,
+            action: { [weak self] in self?.toggleOverlay() }
+        )
+        guard ok else {
+            return "That combo is already in use by another app. Pick a different one."
+        }
+        LayoutStore.shared.setSummonHotKey(binding)
+        return nil
     }
 
     // MARK: Status item

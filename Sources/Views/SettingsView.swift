@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// overrides + custom source folders).
 struct SettingsView: View {
     enum Tab: String, Hashable {
-        case appearance, sources, hidden, renames
+        case appearance, shortcut, sources, hidden, renames
     }
 
     @State private var selection: Tab = .appearance
@@ -17,6 +17,10 @@ struct SettingsView: View {
             AppearanceSettings()
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
                 .tag(Tab.appearance)
+
+            ShortcutSettings()
+                .tabItem { Label("Shortcut", systemImage: "command") }
+                .tag(Tab.shortcut)
 
             SourcesSettings()
                 .tabItem { Label("Sources", systemImage: "folder") }
@@ -70,17 +74,31 @@ private struct AppearanceSettings: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section {
-                LabeledContent("Summon hotkey") {
-                    Text("⌃⌥Space")
-                        .font(.body.monospaced())
-                }
-                Text("A configurable hotkey picker is on the roadmap.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
+    }
+}
+
+// MARK: Shortcut
+
+private struct ShortcutSettings: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Pick the global hotkey that summons Mosaic.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            LabeledContent("Summon hotkey") {
+                HotKeyRecorder()
+            }
+
+            Text("Click the recorder, then press your desired combo. At least one of ⌘, ⌃, or ⌥ is required. ⌘Space and ⌘Tab are reserved by macOS. While recording, the Settings window swallows keystrokes — Esc cancels.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding(.top, 4)
     }
 }
 

@@ -33,12 +33,14 @@ final class LayoutStore {
         var renames: [String: String]
         var customSources: [String]
         var topLevel: [Slot]
+        var summonHotKey: HotKeyBinding
 
         init() {
             hidden = []
             renames = [:]
             customSources = []
             topLevel = []
+            summonHotKey = .default
         }
 
         // Decode each key optionally so adding new fields later doesn't break
@@ -49,10 +51,11 @@ final class LayoutStore {
             renames = try c.decodeIfPresent([String: String].self, forKey: .renames) ?? [:]
             customSources = try c.decodeIfPresent([String].self, forKey: .customSources) ?? []
             topLevel = try c.decodeIfPresent([Slot].self, forKey: .topLevel) ?? []
+            summonHotKey = try c.decodeIfPresent(HotKeyBinding.self, forKey: .summonHotKey) ?? .default
         }
 
         enum CodingKeys: String, CodingKey {
-            case hidden, renames, customSources, topLevel
+            case hidden, renames, customSources, topLevel, summonHotKey
         }
     }
 
@@ -76,6 +79,16 @@ final class LayoutStore {
 
     func removeCustomSource(_ path: String) {
         state.customSources.removeAll { $0 == path }
+        save()
+    }
+
+    // MARK: Hotkey
+
+    /// Persist a new summon-hotkey binding. Does not touch the Carbon
+    /// registration — `AppDelegate.applyHotKey(_:)` is responsible for that
+    /// and only saves once registration succeeds.
+    func setSummonHotKey(_ binding: HotKeyBinding) {
+        state.summonHotKey = binding
         save()
     }
 
