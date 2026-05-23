@@ -24,10 +24,24 @@ struct GridView: View {
         layout.render(allApps: allApps)
     }
 
+    private var trimmedQuery: String {
+        query.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The first app slot in the filtered list, when a search is active.
+    /// Used to highlight the Return-key target and to drive launchFirstMatch.
+    private var firstMatchBundleID: String? {
+        guard !trimmedQuery.isEmpty else { return nil }
+        for slot in visibleSlots {
+            if case .app(let item) = slot { return item.bundleID }
+        }
+        return nil
+    }
+
     /// Slots filtered by the live search. Folders are kept if their name
     /// matches OR any contained app does.
     private var visibleSlots: [DisplaySlot] {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        let trimmed = trimmedQuery
         guard !trimmed.isEmpty else { return slots }
         return slots.compactMap { slot in
             switch slot {
@@ -65,19 +79,14 @@ struct GridView: View {
         }
         .task {
             reload()
-            await refocus()
         }
         .onChange(of: layout.state.customSources) { _, _ in reload() }
-        .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayDidShow)) { _ in
-            query = ""
-            renamingItem = nil
-            openFolderID = nil
-            reload()
-            Task { await refocus() }
+        .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayDidBecomeKey)) { _ in
+            handleSummon()
         }
         .onExitCommand {
             if renamingItem != nil { cancelRename() }
-            else if openFolderID != nil { openFolderID = nil; Task { await refocus() } }
+            else if openFolderID != nil { openFolderID = nil; Task { await restoreSearchFocus() } }
             else if !query.isEmpty { query = "" }
             else { onDismiss?() }
         }
@@ -113,7 +122,12 @@ struct GridView: View {
     private func slotView(for slot: DisplaySlot) -> some View {
         switch slot {
         case .app(let item):
-            AppTile(item: item, iconSize: iconSize, context: .grid) { action in
+            AppTile(
+                item: item,
+                iconSize: iconSize,
+                context: .grid,
+                isHighlighted: item.bundleID == firstMatchBundleID
+            ) { action in
                 handle(action, for: item)
             }
             .dropDestination(for: String.self) { dropped, _ in
@@ -142,7 +156,7 @@ struct GridView: View {
                 .ignoresSafeArea()
                 .onTapGesture {
                     openFolderID = nil
-                    Task { await refocus() }
+                    Task { await restoreSearchFocus() }
                 }
             FolderOpenView(
                 folder: folder,
@@ -158,7 +172,7 @@ struct GridView: View {
                     // Folder may have been auto-deleted (last app removed).
                     if !slots.contains(where: { if case .folder(let f) = $0 { return f.id == folder.id }; return false }) {
                         openFolderID = nil
-                        Task { await refocus() }
+                        Task { await restoreSearchFocus() }
                     }
                 },
                 onRename: { newName in
@@ -167,7 +181,7 @@ struct GridView: View {
                 },
                 onClose: {
                     openFolderID = nil
-                    Task { await refocus() }
+                    Task { await restoreSearchFocus() }
                 }
             )
         }
@@ -215,8 +229,32 @@ struct GridView: View {
         allApps = AppDiscovery.discover(extraRoots: extra)
     }
 
-    private func refocus() async {
+    /// Reset transient UI state and claim search-field focus on every summon.
+    /// Driven by `.mosaicOverlayDidBecomeKey`, so this fires exactly when the
+    /// window actually has keyboard input — no timed guessing.
+    private func handleSummon() {
+        query = ""
+        renamingItem = nil
+        renameDraft = ""
+        openFolderID = nil
+
+        // Defer the focus claim by one runloop tick so SwiftUI has finished
+        // tearing down any modal we just cleared above. Without this, the
+        // focus assignment can land on a half-removed sheet's TextField.
+        Task { @MainActor in
+            searchFocused = true
+        }
+    }
+
+    /// Return focus to the search field after a SwiftUI modal closes.
+    /// The small delay gives SwiftUI a tick to finish removing the modal's
+    /// own TextField before we claim focus — without it, focus can land
+    /// nowhere because the modal's FocusState owner is still resigning.
+    /// Only fires when no modal is up, so a late call can't yank focus
+    /// away from a sheet that opened in the meantime.
+    private func restoreSearchFocus() async {
         try? await Task.sleep(for: .milliseconds(40))
+        guard renamingItem == nil, openFolderID == nil else { return }
         searchFocused = true
     }
 
@@ -228,8 +266,10 @@ struct GridView: View {
     }
 
     private func launchFirstMatch() {
-        // When a folder is open, Return on the search field doesn't apply.
-        guard openFolderID == nil else { return }
+        // Don't fire on an empty query — pressing Return immediately after
+        // summon shouldn't launch a random "first app." It only acts when
+        // the user has narrowed the grid by typing.
+        guard !trimmedQuery.isEmpty, openFolderID == nil else { return }
         for slot in visibleSlots {
             if case .app(let item) = slot {
                 launch(item)
@@ -245,11 +285,11 @@ struct GridView: View {
         layout.rename(item.bundleID, to: target)
         reload()
         renamingItem = nil
-        Task { await refocus() }
+        Task { await restoreSearchFocus() }
     }
 
     private func cancelRename() {
         renamingItem = nil
-        Task { await refocus() }
+        Task { await restoreSearchFocus() }
     }
 }

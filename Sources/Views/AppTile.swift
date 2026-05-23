@@ -13,6 +13,8 @@ struct AppTile: View {
     let item: AppItem
     let iconSize: CGFloat
     var context: Context = .grid
+    /// Drawn with a ring to mark it as the Return-key target.
+    var isHighlighted: Bool = false
     let onAction: (Action) -> Void
 
     @State private var isHovering = false
@@ -28,6 +30,11 @@ struct AppTile: View {
                     .background(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .fill(isHovering ? Color.white.opacity(0.08) : Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: 2)
+                            .opacity(isHighlighted ? 1 : 0)
                     )
 
                 Text(item.displayName)
