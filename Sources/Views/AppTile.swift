@@ -2,11 +2,17 @@ import SwiftUI
 
 struct AppTile: View {
     enum Action {
-        case launch, reveal, rename, hide
+        case launch, reveal, rename, hide, removeFromFolder
+    }
+
+    enum Context {
+        case grid    // top-level: rename + hide
+        case folder  // inside an open folder: removeFromFolder
     }
 
     let item: AppItem
     let iconSize: CGFloat
+    var context: Context = .grid
     let onAction: (Action) -> Void
 
     @State private var isHovering = false
@@ -34,12 +40,26 @@ struct AppTile: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .help(item.displayName)
-        .contextMenu {
-            Button("Launch") { onAction(.launch) }
-            Button("Reveal in Finder") { onAction(.reveal) }
-            Divider()
+        .contextMenu { menuItems }
+        .draggable(item.bundleID) {
+            // Drag preview
+            Image(nsImage: item.icon)
+                .resizable()
+                .frame(width: iconSize, height: iconSize)
+        }
+    }
+
+    @ViewBuilder
+    private var menuItems: some View {
+        Button("Launch") { onAction(.launch) }
+        Button("Reveal in Finder") { onAction(.reveal) }
+        Divider()
+        switch context {
+        case .grid:
             Button("Rename…") { onAction(.rename) }
             Button("Hide") { onAction(.hide) }
+        case .folder:
+            Button("Remove from Folder") { onAction(.removeFromFolder) }
         }
     }
 }
