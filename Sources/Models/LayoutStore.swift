@@ -26,6 +26,8 @@ enum Slot: Codable, Hashable {
 @MainActor
 @Observable
 final class LayoutStore {
+    static let shared = LayoutStore()
+
     struct State: Codable {
         var hidden: Set<String>
         var renames: [String: String]
@@ -61,7 +63,21 @@ final class LayoutStore {
         return support.appending(path: "com.erwinzhang.mosaic/layout.json")
     }()
 
-    init() { load() }
+    private init() { load() }
+
+    // MARK: Custom sources
+
+    func addCustomSource(_ path: String) {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !state.customSources.contains(trimmed) else { return }
+        state.customSources.append(trimmed)
+        save()
+    }
+
+    func removeCustomSource(_ path: String) {
+        state.customSources.removeAll { $0 == path }
+        save()
+    }
 
     func load() {
         guard

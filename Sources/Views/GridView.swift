@@ -5,18 +5,24 @@ struct GridView: View {
     var onDismiss: (() -> Void)? = nil
 
     @State private var allApps: [AppItem] = []
-    @State private var slots: [DisplaySlot] = []
     @State private var query: String = ""
     @FocusState private var searchFocused: Bool
-    @State private var layout = LayoutStore()
+    @Bindable private var layout = LayoutStore.shared
+    @Bindable private var prefs = Preferences.shared
 
     @State private var renamingItem: AppItem?
     @State private var renameDraft: String = ""
     @State private var openFolderID: UUID?
 
-    private let iconSize: CGFloat = 80
+    private var iconSize: CGFloat { prefs.iconSize }
+    private var columnMinWidth: CGFloat { prefs.columnMinWidth }
     private let columnSpacing: CGFloat = 24
     private let rowSpacing: CGFloat = 28
+
+    /// Rendered slots derived from the latest discovery + layout state.
+    private var slots: [DisplaySlot] {
+        layout.render(allApps: allApps)
+    }
 
     /// Slots filtered by the live search. Folders are kept if their name
     /// matches OR any contained app does.
@@ -61,10 +67,12 @@ struct GridView: View {
             reload()
             await refocus()
         }
+        .onChange(of: layout.state.customSources) { _, _ in reload() }
         .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayDidShow)) { _ in
             query = ""
             renamingItem = nil
             openFolderID = nil
+            reload()
             Task { await refocus() }
         }
         .onExitCommand {
@@ -205,7 +213,6 @@ struct GridView: View {
     private func reload() {
         let extra = layout.state.customSources.map { URL(fileURLWithPath: $0) }
         allApps = AppDiscovery.discover(extraRoots: extra)
-        slots = layout.render(allApps: allApps)
     }
 
     private func refocus() async {

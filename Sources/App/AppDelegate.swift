@@ -79,6 +79,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(.separator())
+
         menu.addItem(NSMenuItem(
             title: "Quit Mosaic",
             action: #selector(NSApplication.terminate(_:)),
@@ -91,6 +101,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func menuShow() {
         toggleOverlay()
+    }
+
+    @objc private func openSettings() {
+        // Bring the agent app to the foreground so its Settings window can
+        // become key, then send the standard SwiftUI Settings selector.
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     // MARK: Lifecycle

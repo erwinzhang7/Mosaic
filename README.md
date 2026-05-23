@@ -11,20 +11,20 @@ Launchpad-style launchers are a commodity. This one is free, open, and hackable 
 ## Features
 
 Core
-- [ ] Full-screen grid of all installed apps with real icons
-- [ ] Click or press Enter to launch
-- [ ] Type-to-search live filtering
-- [ ] Global hotkey to summon/dismiss
-- [ ] Right-click menu: launch, reveal in Finder, rename, hide
-- [ ] Folders via drag-and-drop, with persisted layout
-- [ ] Glass background overlay native to Tahoe
+- [x] Full-screen grid of all installed apps with real icons
+- [x] Click or press Enter to launch
+- [x] Type-to-search live filtering
+- [x] Global hotkey to summon/dismiss *(default ⌃⌥Space)*
+- [x] Right-click menu: launch, reveal in Finder, rename, hide
+- [x] Folders via drag-and-drop, with persisted layout
+- [x] Glass background overlay native to Tahoe
 
 Customization
-- [ ] Adjustable grid dimensions and icon size
-- [ ] Vertical-scroll layout mode
-- [ ] Custom per-app renaming
-- [ ] Hide apps you don't want to see
-- [ ] Add custom source folders to scan
+- [x] Adjustable icon size and minimum tile width
+- [ ] Vertical-scroll layout mode *(vertical only today; horizontal-paged planned)*
+- [x] Custom per-app renaming
+- [x] Hide apps you don't want to see *(unhide from Settings)*
+- [x] Add custom source folders to scan
 
 Advanced (require extra permissions)
 - [ ] Launch from hot corners *(Accessibility)*
