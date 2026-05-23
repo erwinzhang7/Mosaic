@@ -1,14 +1,18 @@
 import SwiftUI
 
 struct AppTile: View {
+    enum Action {
+        case launch, reveal, rename, hide
+    }
+
     let item: AppItem
     let iconSize: CGFloat
-    let action: () -> Void
+    let onAction: (Action) -> Void
 
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: action) {
+        Button { onAction(.launch) } label: {
             VStack(spacing: 8) {
                 Image(nsImage: item.icon)
                     .resizable()
@@ -30,5 +34,12 @@ struct AppTile: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .help(item.displayName)
+        .contextMenu {
+            Button("Launch") { onAction(.launch) }
+            Button("Reveal in Finder") { onAction(.reveal) }
+            Divider()
+            Button("Rename…") { onAction(.rename) }
+            Button("Hide") { onAction(.hide) }
+        }
     }
 }

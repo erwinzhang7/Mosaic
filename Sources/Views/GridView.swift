@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct GridView: View {
@@ -7,6 +8,9 @@ struct GridView: View {
     @State private var query: String = ""
     @FocusState private var searchFocused: Bool
     @State private var layout = LayoutStore()
+
+    @State private var renamingItem: AppItem?
+    @State private var renameDraft: String = ""
 
     private let iconSize: CGFloat = 80
     private let columnSpacing: CGFloat = 24
@@ -19,51 +23,85 @@ struct GridView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            SearchField(text: $query, focused: $searchFocused)
-                .padding(.top, 24)
-                .padding(.bottom, 8)
+        ZStack {
+            VStack(spacing: 0) {
+                SearchField(text: $query, focused: $searchFocused)
+                    .padding(.top, 24)
+                    .padding(.bottom, 8)
 
-            ScrollView {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
-                    spacing: rowSpacing
-                ) {
-                    ForEach(filteredItems) { item in
-                        AppTile(item: item, iconSize: iconSize) {
-                            launch(item)
+                ScrollView {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
+                        spacing: rowSpacing
+                    ) {
+                        ForEach(filteredItems) { item in
+                            AppTile(item: item, iconSize: iconSize) { action in
+                                handle(action, for: item)
+                            }
                         }
                     }
+                    .padding(.horizontal, 60)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 60)
-                .padding(.bottom, 40)
             }
+            .background(
+                Color.clear.contentShape(Rectangle())
+                    .onTapGesture { onDismiss?() }
+            )
 
-            // Click in dead space to dismiss.
-            Color.clear
-                .frame(height: 0)
+            if let item = renamingItem {
+                ZStack {
+                    Color.black.opacity(0.45)
+                        .ignoresSafeArea()
+                        .onTapGesture { cancelRename() }
+                    RenameSheet(
+                        originalName: item.displayName,
+                        draft: $renameDraft,
+                        onSave: commitRename,
+                        onCancel: cancelRename
+                    )
+                }
+                .transition(.opacity)
+            }
         }
-        .background(
-            // Catches mouse-down in any otherwise-empty area of the overlay.
-            Color.clear.contentShape(Rectangle())
-                .onTapGesture { onDismiss?() }
-        )
         .task {
             reload()
             await refocus()
         }
         .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayDidShow)) { _ in
             query = ""
+            renamingItem = nil
             Task { await refocus() }
         }
         .onExitCommand {
-            if query.isEmpty {
-                onDismiss?()
-            } else {
+            if renamingItem != nil {
+                cancelRename()
+            } else if !query.isEmpty {
                 query = ""
+            } else {
+                onDismiss?()
             }
         }
         .onSubmit { launchFirstMatch() }
+    }
+
+    // MARK: Actions
+
+    private func handle(_ action: AppTile.Action, for item: AppItem) {
+        switch action {
+        case .launch:
+            launch(item)
+        case .reveal:
+            NSWorkspace.shared.activateFileViewerSelecting([item.sourcePath])
+            onDismiss?()
+        case .rename:
+            renameDraft = item.displayName
+            searchFocused = false
+            renamingItem = item
+        case .hide:
+            layout.hide(item.bundleID)
+            reload()
+        }
     }
 
     private func reload() {
@@ -72,7 +110,6 @@ struct GridView: View {
     }
 
     private func refocus() async {
-        // Small hop so SwiftUI has actually mounted the TextField.
         try? await Task.sleep(for: .milliseconds(40))
         searchFocused = true
     }
@@ -87,5 +124,21 @@ struct GridView: View {
         if let first = filteredItems.first {
             launch(first)
         }
+    }
+
+    private func commitRename() {
+        guard let item = renamingItem else { return }
+        let trimmed = renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        // An empty value or the unchanged original both mean "no override".
+        let target = (trimmed.isEmpty || trimmed == item.displayName) ? nil : trimmed
+        layout.rename(item.bundleID, to: target)
+        reload()
+        renamingItem = nil
+        Task { await refocus() }
+    }
+
+    private func cancelRename() {
+        renamingItem = nil
+        Task { await refocus() }
     }
 }

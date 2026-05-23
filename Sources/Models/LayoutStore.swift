@@ -57,4 +57,28 @@ final class LayoutStore {
             return copy
         }
     }
+
+    // MARK: Mutations
+
+    func hide(_ bundleID: String) {
+        state.hidden.insert(bundleID)
+        save()
+    }
+
+    func unhide(_ bundleID: String) {
+        state.hidden.remove(bundleID)
+        save()
+    }
+
+    /// Pass `nil` or an empty string to clear the override and fall back to the
+    /// app's own display name.
+    func rename(_ bundleID: String, to name: String?) {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty {
+            state.renames.removeValue(forKey: bundleID)
+        } else {
+            state.renames[bundleID] = trimmed
+        }
+        save()
+    }
 }
