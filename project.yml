@@ -17,7 +17,7 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: Mosaic
     INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Erwin Zhang"
-    INFOPLIST_KEY_LSUIElement: NO         # flip to YES at step 3 (agent mode)
+    INFOPLIST_KEY_LSUIElement: YES        # agent app: no Dock icon, summoned via hotkey
     INFOPLIST_KEY_NSPrincipalClass: NSApplication
     ENABLE_HARDENED_RUNTIME: YES
     ENABLE_APP_SANDBOX: NO                # launcher needs to enumerate & launch apps

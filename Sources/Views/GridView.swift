@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct GridView: View {
+    var onDismiss: (() -> Void)? = nil
+
     @State private var allItems: [AppItem] = []
     @State private var query: String = ""
     @FocusState private var searchFocused: Bool
@@ -19,7 +21,7 @@ struct GridView: View {
     var body: some View {
         VStack(spacing: 0) {
             SearchField(text: $query, focused: $searchFocused)
-                .padding(.top, 20)
+                .padding(.top, 24)
                 .padding(.bottom, 8)
 
             ScrollView {
@@ -33,15 +35,34 @@ struct GridView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 60)
                 .padding(.bottom, 40)
             }
+
+            // Click in dead space to dismiss.
+            Color.clear
+                .frame(height: 0)
         }
+        .background(
+            // Catches mouse-down in any otherwise-empty area of the overlay.
+            Color.clear.contentShape(Rectangle())
+                .onTapGesture { onDismiss?() }
+        )
         .task {
             reload()
-            searchFocused = true
+            await refocus()
         }
-        .onExitCommand { query = "" }
+        .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayDidShow)) { _ in
+            query = ""
+            Task { await refocus() }
+        }
+        .onExitCommand {
+            if query.isEmpty {
+                onDismiss?()
+            } else {
+                query = ""
+            }
+        }
         .onSubmit { launchFirstMatch() }
     }
 
@@ -50,9 +71,16 @@ struct GridView: View {
         allItems = layout.apply(to: AppDiscovery.discover(extraRoots: extra))
     }
 
+    private func refocus() async {
+        // Small hop so SwiftUI has actually mounted the TextField.
+        try? await Task.sleep(for: .milliseconds(40))
+        searchFocused = true
+    }
+
     private func launch(_ item: AppItem) {
         AppLauncher.launch(item)
         query = ""
+        onDismiss?()
     }
 
     private func launchFirstMatch() {
