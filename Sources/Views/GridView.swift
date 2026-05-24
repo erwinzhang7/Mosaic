@@ -117,6 +117,13 @@ struct GridView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayDidBecomeKey)) { _ in
             handleSummon()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mosaicAppLaunchFailed)) { _ in
+            // The bundle was likely moved/deleted between scan and launch.
+            // Re-discover so the stale tile clears. The toast itself is shown
+            // by AppDelegate (the overlay may already be hidden by the time
+            // this fires).
+            reload()
+        }
         .onExitCommand {
             if uninstallError != nil { uninstallError = nil; Task { await restoreSearchFocus() } }
             else if uninstallSet != nil { closeUninstall() }
@@ -174,17 +181,37 @@ struct GridView: View {
         }
     }
 
+    @ViewBuilder
     private var appsGrid: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
-            spacing: rowSpacing
-        ) {
-            ForEach(visibleSlots) { slot in
-                slotView(for: slot)
+        if slots.isEmpty {
+            EmptyStateView(
+                icon: "tray",
+                title: "No apps to show",
+                message: "Mosaic scans /Applications, /System/Applications, and ~/Applications. If your apps live elsewhere, add the folder in Settings ▸ Sources.",
+                primaryAction: .init(label: "Open Sources Settings") {
+                    onDismiss?()
+                    openSettingsWindow()
+                }
+            )
+        } else if visibleSlots.isEmpty {
+            EmptyStateView(
+                icon: "magnifyingglass",
+                title: "No matches",
+                message: "Nothing in your apps matches \u{201C}\(trimmedQuery)\u{201D}.",
+                primaryAction: .init(label: "Clear search") { query = "" }
+            )
+        } else {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
+                spacing: rowSpacing
+            ) {
+                ForEach(visibleSlots) { slot in
+                    slotView(for: slot)
+                }
             }
+            .padding(.horizontal, 60)
+            .padding(.bottom, 40)
         }
-        .padding(.horizontal, 60)
-        .padding(.bottom, 40)
     }
 
     @ViewBuilder
@@ -194,11 +221,19 @@ struct GridView: View {
                 permissionBannerForWindows
             }
 
-            if filteredWindows.isEmpty {
-                Text(windows.isEmpty ? "No open windows found." : "No matches.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 40)
+            if windows.isEmpty {
+                EmptyStateView(
+                    icon: "macwindow",
+                    title: "No open windows",
+                    message: "Open something in another app and switch back to see it here."
+                )
+            } else if filteredWindows.isEmpty {
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: "No matches",
+                    message: "No open windows match \u{201C}\(trimmedQuery)\u{201D}.",
+                    primaryAction: .init(label: "Clear search") { query = "" }
+                )
             } else {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 320, maximum: 480), spacing: 12)],
@@ -428,6 +463,12 @@ struct GridView: View {
     private func reload() {
         let extra = layout.state.customSources.map { URL(fileURLWithPath: $0) }
         allApps = AppDiscovery.discover(extraRoots: extra)
+    }
+
+    private func openSettingsWindow() {
+        // Same path AppDelegate uses for its menu-bar Settings… item.
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     private func reloadWindows() {

@@ -157,7 +157,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Lifecycle
 
     /// When the user switches to another app, dismiss the overlay so it doesn't
-    /// linger behind the next active window.
+    /// linger behind the next active window. Also surface launch-failure
+    /// toasts here so they don't depend on the overlay still being visible.
     private func observeAppActivation() {
         NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification,
@@ -165,6 +166,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.hideOverlay() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .mosaicAppLaunchFailed,
+            object: nil,
+            queue: .main
+        ) { notif in
+            let name = (notif.userInfo?["name"] as? String) ?? "the app"
+            Task { @MainActor in
+                ToastWindow.show(message: "Couldn't open \(name) — it may have been moved or deleted.")
+            }
         }
     }
 }

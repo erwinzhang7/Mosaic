@@ -319,10 +319,24 @@ private struct SourcesSettings: View {
 
             List(selection: $selection) {
                 ForEach(layout.state.customSources, id: \.self) { path in
-                    Text(path)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .tag(path)
+                    HStack(spacing: 6) {
+                        Image(systemName: pathExists(path) ? "folder" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(pathExists(path) ? AnyShapeStyle(HierarchicalShapeStyle.secondary) : AnyShapeStyle(Color.orange))
+                        Text(path)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if !pathExists(path) {
+                            Text("missing")
+                                .font(.caption.weight(.medium))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(
+                                    Capsule().fill(Color.orange.opacity(0.2))
+                                )
+                                .foregroundStyle(Color.orange)
+                        }
+                    }
+                    .tag(path)
                 }
             }
             .frame(minHeight: 180)
@@ -336,9 +350,21 @@ private struct SourcesSettings: View {
                     }
                 }
                 .disabled(selection == nil)
+                if layout.state.customSources.contains(where: { !pathExists($0) }) {
+                    Button("Remove All Missing") {
+                        for p in layout.state.customSources where !pathExists(p) {
+                            layout.removeCustomSource(p)
+                        }
+                        if let sel = selection, !pathExists(sel) { selection = nil }
+                    }
+                }
                 Spacer()
             }
         }
+    }
+
+    private func pathExists(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: path)
     }
 
     private func pickFolder() {
