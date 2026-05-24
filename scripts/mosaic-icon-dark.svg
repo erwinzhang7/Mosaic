@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    
+    <linearGradient id="bgFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2A2520"></stop>
+      <stop offset="100%" stop-color="#161310"></stop>
+    </linearGradient>
+
+    
+    <linearGradient id="topGloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.14"></stop>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0.02"></stop>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"></stop>
+    </linearGradient>
+
+    
+    <radialGradient id="bottomWarm" cx="0.5" cy="1.05" r="0.7">
+      <stop offset="0%" stop-color="#7A4A2C" stop-opacity="0.28"></stop>
+      <stop offset="100%" stop-color="#7A4A2C" stop-opacity="0"></stop>
+    </radialGradient>
+
+    <path id="squircle" d="&#xA;      M 512 0&#xA;      C 798.72 0 921.6 0 972.8 51.2&#xA;      C 1024 102.4 1024 225.28 1024 512&#xA;      C 1024 798.72 1024 921.6 972.8 972.8&#xA;      C 921.6 1024 798.72 1024 512 1024&#xA;      C 225.28 1024 102.4 1024 51.2 972.8&#xA;      C 0 921.6 0 798.72 0 512&#xA;      C 0 225.28 0 102.4 51.2 51.2&#xA;      C 102.4 0 225.28 0 512 0 Z"></path>
+
+    <clipPath id="squircleClip">
+      <use href="#squircle"></use>
+    </clipPath>
+
+    
+    <linearGradient id="gTerracotta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D27A57"></stop>
+      <stop offset="100%" stop-color="#B85F3F"></stop>
+    </linearGradient>
+    <linearGradient id="gSage" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9AB596"></stop>
+      <stop offset="100%" stop-color="#7C9A79"></stop>
+    </linearGradient>
+    <linearGradient id="gTeal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3A6F76"></stop>
+      <stop offset="100%" stop-color="#244F56"></stop>
+    </linearGradient>
+    <linearGradient id="gSand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#EFD79A"></stop>
+      <stop offset="100%" stop-color="#DFC07A"></stop>
+    </linearGradient>
+    <linearGradient id="gPlum" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9A6779"></stop>
+      <stop offset="100%" stop-color="#7C4F60"></stop>
+    </linearGradient>
+
+    <filter id="gridShadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="10"></feGaussianBlur>
+      <feOffset dx="0" dy="8" result="offsetblur"></feOffset>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.45"></feFuncA>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode></feMergeNode>
+        <feMergeNode in="SourceGraphic"></feMergeNode>
+      </feMerge>
+    </filter>
+  </defs>
+
+  
+  <use href="#squircle" fill="url(#bgFill)"></use>
+
+  
+  <g clip-path="url(#squircleClip)">
+    <rect width="1024" height="1024" fill="url(#bottomWarm)"></rect>
+    <rect width="1024" height="420" fill="url(#topGloss)"></rect>
+    
+    <path d="M 140 22 Q 512 -4 884 22" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="2" fill="none"></path>
+  </g>
+
+  
+  <use href="#squircle" fill="none" stroke="#FFFFFF" stroke-opacity="0.06" stroke-width="2"></use>
+
+  
+  <g filter="url(#gridShadow)" transform="translate(192 192)">
+    
+    <g transform="translate(0   0)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gTerracotta)"></rect></g>
+    <g transform="translate(224 0)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gTeal)"></rect></g>
+    <g transform="translate(448 0)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gSage)"></rect></g>
+    
+    <g transform="translate(0   224)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gSand)"></rect></g>
+    <g transform="translate(224 224)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gPlum)"></rect></g>
+    <g transform="translate(448 224)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gTerracotta)"></rect></g>
+    
+    <g transform="translate(0   448)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gSage)"></rect></g>
+    <g transform="translate(224 448)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gSand)"></rect></g>
+    <g transform="translate(448 448)"><rect width="192" height="192" rx="28" ry="28" fill="url(#gTeal)"></rect></g>
+
+    
+    <g pointer-events="none">
+      <rect x="6" y="6" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+      <rect x="230" y="6" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+      <rect x="454" y="6" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+      <rect x="6" y="230" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+      <rect x="230" y="230" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+      <rect x="454" y="230" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+      <rect x="6" y="454" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+      <rect x="230" y="454" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+      <rect x="454" y="454" width="180" height="56" rx="22" ry="22" fill="#FFFFFF" opacity="0.10"></rect>
+    </g>
+  </g>
+</svg>
