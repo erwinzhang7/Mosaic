@@ -146,6 +146,41 @@ final class LayoutStore {
         save()
     }
 
+    /// Reorder a top-level app: move `droppedBundleID` so it lands at the
+    /// slot currently held by `targetBundleID`. Source can be a tile that
+    /// hasn't been explicitly ordered yet (one of `render`'s alphabetically-
+    /// trailing apps) — we materialize the full displayed order, perform the
+    /// move on that, and write it back as the new authoritative order.
+    /// Newly-installed apps still get appended alphabetically by `render`
+    /// until the user moves them.
+    func reorder(droppedBundleID: String, ontoTargetBundleID targetBundleID: String, allApps: [AppItem]) {
+        guard droppedBundleID != targetBundleID else { return }
+
+        // Build the current displayed order as a fresh [Slot] sequence.
+        var working: [Slot] = render(allApps: allApps).map { display in
+            switch display {
+            case .app(let item):
+                return .app(item.bundleID)
+            case .folder(let f):
+                return .folder(Folder(id: f.id, name: f.name, bundleIDs: f.items.map(\.bundleID)))
+            }
+        }
+
+        let sourceSlot: Slot = .app(droppedBundleID)
+        guard let sourceIdx = working.firstIndex(of: sourceSlot) else { return }
+        working.remove(at: sourceIdx)
+
+        guard let targetIdx = working.firstIndex(where: {
+            if case .app(let b) = $0 { return b == targetBundleID }
+            return false
+        }) else { return }
+
+        working.insert(sourceSlot, at: targetIdx)
+
+        state.topLevel = working
+        save()
+    }
+
     func addToFolder(_ bundleID: String, folderID: UUID) {
         detach(bundleID: bundleID)
         for i in state.topLevel.indices {

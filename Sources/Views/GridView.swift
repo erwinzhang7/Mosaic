@@ -299,8 +299,14 @@ struct GridView: View {
             }
             .dropDestination(for: String.self) { dropped, _ in
                 guard let droppedID = dropped.first, droppedID != item.bundleID else { return false }
-                layout.createFolder(droppedBundleID: droppedID, ontoTargetBundleID: item.bundleID)
-                reload()
+                // Default: reorder. Hold Option at drop time to create a
+                // folder instead — matches the Launchpad-style intuition
+                // (drag = move, modifier = combine).
+                if NSEvent.modifierFlags.contains(.option) {
+                    layout.createFolder(droppedBundleID: droppedID, ontoTargetBundleID: item.bundleID)
+                } else {
+                    layout.reorder(droppedBundleID: droppedID, ontoTargetBundleID: item.bundleID, allApps: allApps)
+                }
                 return true
             }
 
