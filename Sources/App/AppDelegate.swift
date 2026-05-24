@@ -14,7 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installStatusItem()
         installOverlay()
         installHotKey()
+        installTriggers()
         observeAppActivation()
+    }
+
+    // MARK: Triggers (hot corner, pinch)
+
+    private func installTriggers() {
+        TriggerController.shared.summon = { [weak self] in self?.toggleOverlay() }
+        // Idempotent: starts only the watchers whose toggles are on AND for
+        // which Accessibility is granted. Re-runs on permission grant/revoke
+        // via the controller's own notification observer.
+        TriggerController.shared.applyCurrentSettings()
     }
 
     // MARK: Overlay

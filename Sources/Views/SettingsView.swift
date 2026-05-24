@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// overrides + custom source folders).
 struct SettingsView: View {
     enum Tab: String, Hashable {
-        case appearance, shortcut, sources, hidden, renames
+        case appearance, shortcut, triggers, sources, hidden, renames
     }
 
     @State private var selection: Tab = .appearance
@@ -22,6 +22,10 @@ struct SettingsView: View {
                 .tabItem { Label("Shortcut", systemImage: "command") }
                 .tag(Tab.shortcut)
 
+            TriggersSettings()
+                .tabItem { Label("Triggers", systemImage: "rectangle.inset.filled.and.cursorarrow") }
+                .tag(Tab.triggers)
+
             SourcesSettings()
                 .tabItem { Label("Sources", systemImage: "folder") }
                 .tag(Tab.sources)
@@ -35,7 +39,7 @@ struct SettingsView: View {
                 .tag(Tab.renames)
         }
         .padding(20)
-        .frame(width: 560, height: 420)
+        .frame(width: 580, height: 460)
     }
 }
 
@@ -99,6 +103,90 @@ private struct ShortcutSettings: View {
             Spacer()
         }
         .padding(.top, 4)
+    }
+}
+
+// MARK: Triggers
+
+private struct TriggersSettings: View {
+    @Bindable private var prefs = Preferences.shared
+    @Bindable private var permission = AccessibilityPermission.shared
+
+    var body: some View {
+        Form {
+            if !permission.isTrusted {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Hot corners and pinch need Accessibility permission.", systemImage: "exclamationmark.shield")
+                            .font(.callout)
+                        Text("Grant it once and Mosaic can see the global cursor and pinch stream. The hotkey, search, and launching work without it.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Button("Open System Settings") {
+                                permission.openSystemSettings()
+                            }
+                            Button("Re-check") {
+                                permission.refresh()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("Hot corner") {
+                Toggle("Summon when the cursor parks in a corner", isOn: $prefs.hotCornerEnabled)
+                    .onChange(of: prefs.hotCornerEnabled) { _, new in
+                        if new && !permission.isTrusted { permission.requestPrompt() }
+                        TriggerController.shared.applyCurrentSettings()
+                    }
+
+                if prefs.hotCornerEnabled {
+                    Picker("Corner", selection: $prefs.hotCorner) {
+                        ForEach(HotCorner.allCases, id: \.self) { c in
+                            Text(c.label).tag(c)
+                        }
+                    }
+                    .onChange(of: prefs.hotCorner) { _, _ in TriggerController.shared.applyCurrentSettings() }
+
+                    LabeledContent("Dwell") {
+                        VStack(alignment: .leading) {
+                            Slider(value: $prefs.hotCornerDwell, in: 0.05...1.0, step: 0.05)
+                            Text("\(Int(prefs.hotCornerDwell * 1000)) ms")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .onChange(of: prefs.hotCornerDwell) { _, _ in TriggerController.shared.applyCurrentSettings() }
+
+                    Text("Off by default to avoid stomping on macOS hot corners (Mission Control, Quick Note, etc.). If you've assigned the same corner there, both will fire.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Pinch gesture") {
+                Toggle("Summon with a trackpad pinch", isOn: $prefs.pinchEnabled)
+                    .onChange(of: prefs.pinchEnabled) { _, new in
+                        if new && !permission.isTrusted { permission.requestPrompt() }
+                        TriggerController.shared.applyCurrentSettings()
+                    }
+
+                if prefs.pinchEnabled {
+                    Picker("Direction", selection: $prefs.pinchDirection) {
+                        ForEach(PinchDirection.allCases, id: \.self) { d in
+                            Text(d.label).tag(d)
+                        }
+                    }
+                    .onChange(of: prefs.pinchDirection) { _, _ in TriggerController.shared.applyCurrentSettings() }
+
+                    Text("One gesture = one summon. Pinch in your chosen direction past the recognition threshold.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 
