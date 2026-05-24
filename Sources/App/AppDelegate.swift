@@ -107,6 +107,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
+            // Menu-bar glyph is intentionally a separate asset from the app
+            // icon. SF Symbols are auto-template images, so they adapt to
+            // light/dark menu bars without further config. To swap, change
+            // the symbol name here or assign a custom template NSImage
+            // (set `isTemplate = true`). See Sources/Resources/Assets.xcassets/README.md.
             button.image = NSImage(systemSymbolName: "square.grid.3x3.fill",
                                    accessibilityDescription: "Mosaic")
         }
