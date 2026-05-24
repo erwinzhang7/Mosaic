@@ -9,10 +9,15 @@ struct GridView: View {
     @FocusState private var searchFocused: Bool
     @Bindable private var layout = LayoutStore.shared
     @Bindable private var prefs = Preferences.shared
+    @Bindable private var permission = AccessibilityPermission.shared
 
     @State private var renamingItem: AppItem?
     @State private var renameDraft: String = ""
     @State private var openFolderID: UUID?
+
+    // Windows mode state — enumeration runs on mode switch, not on a timer.
+    @State private var mode: OverlayMode = .apps
+    @State private var windows: [WindowItem] = []
 
     private var iconSize: CGFloat { prefs.iconSize }
     private var columnMinWidth: CGFloat { prefs.columnMinWidth }
@@ -65,6 +70,22 @@ struct GridView: View {
         return nil
     }
 
+    // MARK: Windows mode
+
+    private var filteredWindows: [WindowItem] {
+        let q = trimmedQuery
+        guard !q.isEmpty else { return windows }
+        return windows.filter {
+            $0.displayTitle.localizedCaseInsensitiveContains(q)
+                || $0.ownerName.localizedCaseInsensitiveContains(q)
+        }
+    }
+
+    private var firstWindowMatchID: CGWindowID? {
+        guard !trimmedQuery.isEmpty else { return nil }
+        return filteredWindows.first?.id
+    }
+
     var body: some View {
         ZStack {
             mainContent
@@ -90,31 +111,126 @@ struct GridView: View {
             else if !query.isEmpty { query = "" }
             else { onDismiss?() }
         }
-        .onSubmit { launchFirstMatch() }
+        .onSubmit {
+            switch mode {
+            case .apps:    launchFirstMatch()
+            case .windows: selectFirstWindowMatch()
+            }
+        }
     }
 
     private var mainContent: some View {
         VStack(spacing: 0) {
+            modeSwitcher
+                .padding(.top, 18)
+                .padding(.bottom, 4)
+
             SearchField(text: $query, focused: $searchFocused)
-                .padding(.top, 24)
                 .padding(.bottom, 8)
 
             ScrollView {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
-                    spacing: rowSpacing
-                ) {
-                    ForEach(visibleSlots) { slot in
-                        slotView(for: slot)
-                    }
+                switch mode {
+                case .apps:    appsGrid
+                case .windows: windowsList
                 }
-                .padding(.horizontal, 60)
-                .padding(.bottom, 40)
             }
         }
         .background(
             Color.clear.contentShape(Rectangle())
                 .onTapGesture { onDismiss?() }
+        )
+    }
+
+    private var modeSwitcher: some View {
+        Picker("", selection: $mode) {
+            ForEach(OverlayMode.allCases, id: \.self) { m in
+                Text(m.label).tag(m)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: 220)
+        .onChange(of: mode) { _, newMode in
+            if newMode == .windows {
+                reloadWindows()
+            }
+            // The picker steals focus on click; give it back to the search field
+            // so typing keeps filtering immediately.
+            Task { @MainActor in searchFocused = true }
+        }
+    }
+
+    private var appsGrid: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
+            spacing: rowSpacing
+        ) {
+            ForEach(visibleSlots) { slot in
+                slotView(for: slot)
+            }
+        }
+        .padding(.horizontal, 60)
+        .padding(.bottom, 40)
+    }
+
+    @ViewBuilder
+    private var windowsList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !permission.isTrusted {
+                permissionBannerForWindows
+            }
+
+            if filteredWindows.isEmpty {
+                Text(windows.isEmpty ? "No open windows found." : "No matches.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 40)
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 320, maximum: 480), spacing: 12)],
+                    spacing: 10
+                ) {
+                    ForEach(filteredWindows) { item in
+                        WindowTile(
+                            item: item,
+                            iconSize: 32,
+                            isHighlighted: item.id == firstWindowMatchID
+                        ) {
+                            selectWindow(item)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 60)
+        .padding(.bottom, 40)
+        .padding(.top, 4)
+    }
+
+    private var permissionBannerForWindows: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.shield")
+                .foregroundStyle(.orange)
+                .font(.title3)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Limited without Accessibility")
+                    .font(.callout.weight(.semibold))
+                Text("Window titles for other apps may be empty, and selecting a window only activates its app rather than raising that specific window.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Open System Settings") { permission.openSystemSettings() }
+                        .buttonStyle(.link)
+                    Button("Re-check") { permission.refresh() }
+                        .buttonStyle(.link)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.orange.opacity(0.1))
         )
     }
 
@@ -229,6 +345,32 @@ struct GridView: View {
         allApps = AppDiscovery.discover(extraRoots: extra)
     }
 
+    private func reloadWindows() {
+        windows = WindowDiscovery.discover()
+    }
+
+    private func selectWindow(_ item: WindowItem) {
+        // Lazy permission prompt: AX is needed to raise the specific window
+        // and to read most window titles. The first click fires the system
+        // prompt; if denied, raise() falls back to activating the owning app.
+        if !permission.isTrusted {
+            permission.requestPrompt()
+        }
+        WindowRaiser.raise(item)
+        query = ""
+        onDismiss?()
+    }
+
+    private func selectFirstWindowMatch() {
+        // Mirror launchFirstMatch's behavior: Return on an empty query should
+        // not trigger anything destructive (here, raising an arbitrary first
+        // window). Only fire when the user has narrowed the list.
+        guard !trimmedQuery.isEmpty else { return }
+        if let item = filteredWindows.first {
+            selectWindow(item)
+        }
+    }
+
     /// Reset transient UI state and claim search-field focus on every summon.
     /// Driven by `.mosaicOverlayDidBecomeKey`, so this fires exactly when the
     /// window actually has keyboard input — no timed guessing.
@@ -237,6 +379,11 @@ struct GridView: View {
         renamingItem = nil
         renameDraft = ""
         openFolderID = nil
+        // Default summon mode is always Apps — windows mode is opt-in per summon.
+        mode = .apps
+        // Windows enumeration is stale once we return to the overlay; drop it
+        // so the next windows-mode switch re-enumerates fresh.
+        windows = []
 
         // Defer the focus claim by one runloop tick so SwiftUI has finished
         // tearing down any modal we just cleared above. Without this, the
