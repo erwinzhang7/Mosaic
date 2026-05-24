@@ -24,6 +24,15 @@ struct GridView: View {
     @State private var uninstallSet: UninstallSet?
     @State private var uninstallError: String?
 
+    // Paged-layout state — only consulted when prefs.verticalScroll is false
+    // AND there's no active search.
+    @State private var currentPageID: Int?
+
+    /// Slots-per-page for the horizontal paged layout. Conservative default
+    /// that reads well on most displays. Not adaptive to window size yet;
+    /// that's a future polish.
+    private let tilesPerPage = 35
+
     private var iconSize: CGFloat { prefs.iconSize }
     private var columnMinWidth: CGFloat { prefs.columnMinWidth }
     private let columnSpacing: CGFloat = 24
@@ -150,10 +159,10 @@ struct GridView: View {
             SearchField(text: $query, focused: $searchFocused)
                 .padding(.bottom, 8)
 
-            ScrollView {
+            Group {
                 switch mode {
-                case .apps:    appsGrid
-                case .windows: windowsList
+                case .apps:    appsContent
+                case .windows: ScrollView { windowsList }
                 }
             }
         }
@@ -183,7 +192,7 @@ struct GridView: View {
     }
 
     @ViewBuilder
-    private var appsGrid: some View {
+    private var appsContent: some View {
         if slots.isEmpty {
             EmptyStateView(
                 icon: "tray",
@@ -201,17 +210,79 @@ struct GridView: View {
                 message: "Nothing in your apps matches \u{201C}\(trimmedQuery)\u{201D}.",
                 primaryAction: .init(label: "Clear search") { query = "" }
             )
+        } else if prefs.verticalScroll || !trimmedQuery.isEmpty {
+            // Single vertical-scrolling grid. Always used when searching —
+            // paged layout doesn't fit short, filtered result sets cleanly.
+            ScrollView { appsScrollGrid }
         } else {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
-                spacing: rowSpacing
-            ) {
-                ForEach(visibleSlots) { slot in
-                    slotView(for: slot)
-                }
+            // Paged horizontal layout.
+            appsPagedGrid
+        }
+    }
+
+    private var appsScrollGrid: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
+            spacing: rowSpacing
+        ) {
+            ForEach(visibleSlots) { slot in
+                slotView(for: slot)
             }
-            .padding(.horizontal, 60)
-            .padding(.bottom, 40)
+        }
+        .padding(.horizontal, 60)
+        .padding(.bottom, 40)
+    }
+
+    private var appsPagedGrid: some View {
+        let pages = paginated(visibleSlots)
+        return VStack(spacing: 8) {
+            GeometryReader { geo in
+                ScrollView(.horizontal) {
+                    HStack(spacing: 0) {
+                        ForEach(pages.indices, id: \.self) { idx in
+                            pageGrid(slots: pages[idx])
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .id(idx)
+                        }
+                    }
+                    .scrollTargetLayout()
+                }
+                .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $currentPageID)
+            }
+
+            if pages.count > 1 {
+                HStack(spacing: 8) {
+                    ForEach(pages.indices, id: \.self) { idx in
+                        Circle()
+                            .fill((currentPageID ?? 0) == idx ? Color.primary.opacity(0.85) : Color.primary.opacity(0.25))
+                            .frame(width: 7, height: 7)
+                    }
+                }
+                .padding(.bottom, 14)
+            }
+        }
+    }
+
+    private func pageGrid(slots: [DisplaySlot]) -> some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: iconSize + 32), spacing: columnSpacing)],
+            spacing: rowSpacing
+        ) {
+            ForEach(slots) { slot in
+                slotView(for: slot)
+            }
+        }
+        .padding(.horizontal, 60)
+        .padding(.vertical, 30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func paginated(_ slots: [DisplaySlot]) -> [[DisplaySlot]] {
+        guard tilesPerPage > 0, !slots.isEmpty else { return [slots] }
+        return stride(from: 0, to: slots.count, by: tilesPerPage).map { start in
+            Array(slots[start..<min(start + tilesPerPage, slots.count)])
         }
     }
 

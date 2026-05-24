@@ -158,10 +158,11 @@ private struct AppearanceSettings: View {
                 }
             }
 
-            Section {
+            Section("Layout") {
                 Toggle("Vertical scroll (single page)", isOn: $prefs.verticalScroll)
-                    .disabled(true)
-                Text("Horizontal-paged layout is planned; only vertical scroll is supported today.")
+                Text(prefs.verticalScroll
+                     ? "One long scrolling grid of all your apps."
+                     : "Horizontal pages — swipe between pages of apps. While searching, the grid falls back to a single scrolling list regardless of this setting.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
