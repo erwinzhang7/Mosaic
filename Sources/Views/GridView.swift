@@ -120,6 +120,9 @@ struct GridView: View {
 
     var body: some View {
         ZStack {
+            Color.clear.contentShape(Rectangle())
+                .onTapGesture { handleBackgroundClick() }
+
             mainContent
 
             if let folder = openFolder {
@@ -184,10 +187,6 @@ struct GridView: View {
                 }
             }
         }
-        .background(
-            Color.clear.contentShape(Rectangle())
-                .onTapGesture { onDismiss?() }
-        )
     }
 
     private var modeSwitcher: some View {
@@ -485,6 +484,15 @@ struct GridView: View {
     }
 
     // MARK: Actions
+
+    private func handleBackgroundClick() {
+        guard renamingItem == nil,
+              openFolderID == nil,
+              uninstallSet == nil,
+              uninstallError == nil
+        else { return }
+        onDismiss?()
+    }
 
     private func handle(_ action: AppTile.Action, for item: AppItem) {
         switch action {
