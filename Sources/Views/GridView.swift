@@ -27,6 +27,7 @@ struct GridView: View {
     // Paged-layout state — only consulted when prefs.verticalScroll is false
     // AND there's no active search.
     @State private var currentPageID: Int?
+    @State private var topSafeInset: CGFloat = 0
 
     /// Slots-per-page for the horizontal paged layout. Conservative default
     /// that reads well on most displays. Not adaptive to window size yet;
@@ -148,6 +149,9 @@ struct GridView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayDidBecomeKey)) { _ in
             handleSummon()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            topSafeInset = NSScreen.main?.safeAreaInsets.top ?? 0
+        }
         .onReceive(NotificationCenter.default.publisher(for: .mosaicAppLaunchFailed)) { _ in
             // The bundle was likely moved/deleted between scan and launch.
             // Re-discover so the stale tile clears. The toast itself is shown
@@ -174,7 +178,7 @@ struct GridView: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             modeSwitcher
-                .padding(.top, 18)
+                .padding(.top, 18 + topSafeInset)
                 .padding(.bottom, 4)
 
             SearchField(text: $query, focused: $searchFocused)
@@ -624,6 +628,7 @@ struct GridView: View {
     /// Driven by `.mosaicOverlayDidBecomeKey`, so this fires exactly when the
     /// window actually has keyboard input — no timed guessing.
     private func handleSummon() {
+        topSafeInset = NSScreen.main?.safeAreaInsets.top ?? 0
         query = ""
         renamingItem = nil
         renameDraft = ""
