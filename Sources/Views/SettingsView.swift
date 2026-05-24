@@ -185,8 +185,35 @@ private struct TriggersSettings: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            f4Section
         }
         .formStyle(.grouped)
+    }
+
+    private var f4Tap: F4EventTap { TriggerController.shared.f4Tap }
+
+    @ViewBuilder
+    private var f4Section: some View {
+        Section("F4 key") {
+            Toggle("Summon with F4 (Launchpad key)", isOn: $prefs.f4Enabled)
+                .onChange(of: prefs.f4Enabled) { _, new in
+                    if new && !permission.isTrusted { permission.requestPrompt() }
+                    TriggerController.shared.applyCurrentSettings()
+                }
+
+            if prefs.f4Enabled {
+                if permission.isTrusted && !f4Tap.isInstalled {
+                    Label(f4Tap.lastFailure ?? "Event tap didn't install. Toggle this off and on, or relaunch Mosaic.", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                Text("Uses a CGEventTap to intercept F4 and swallow it before macOS fires Launchpad. **Caveat:** on most Apple keyboards F4 is the Launchpad/Spotlight media key. macOS swallows it before any tap can see it unless you either enable “Use F1, F2, etc. keys as standard function keys” in System Settings ▸ Keyboard, **or** press Fn+F4. If neither works, that's an OS-level limitation — there's no clean way around it without private API.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

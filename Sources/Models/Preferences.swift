@@ -50,6 +50,12 @@ final class Preferences {
         didSet { defaults.set(pinchDirection.rawValue, forKey: Keys.pinchDirection) }
     }
 
+    // MARK: F4 trigger
+
+    var f4Enabled: Bool {
+        didSet { defaults.set(f4Enabled, forKey: Keys.f4Enabled) }
+    }
+
     private init() {
         iconSize = (defaults.object(forKey: Keys.iconSize) as? Double) ?? 80
         columnMinWidth = (defaults.object(forKey: Keys.columnMinWidth) as? Double) ?? 112
@@ -61,6 +67,8 @@ final class Preferences {
 
         pinchEnabled = (defaults.object(forKey: Keys.pinchEnabled) as? Bool) ?? false
         pinchDirection = PinchDirection(rawValue: defaults.string(forKey: Keys.pinchDirection) ?? "") ?? .open
+
+        f4Enabled = (defaults.object(forKey: Keys.f4Enabled) as? Bool) ?? false
     }
 
     private enum Keys {
@@ -74,5 +82,7 @@ final class Preferences {
 
         static let pinchEnabled = "pinchEnabled"
         static let pinchDirection = "pinchDirection"
+
+        static let f4Enabled = "f4Enabled"
     }
 }

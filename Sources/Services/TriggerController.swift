@@ -24,7 +24,14 @@ final class TriggerController {
         self?.summon()
     }
 
+    /// Exposed so Settings can read its observable state (isInstalled,
+    /// lastFailure) and surface the right warning when the toggle is on but
+    /// the tap couldn't install.
+    let f4Tap = F4EventTap()
+
     private init() {
+        f4Tap.onTrigger = { [weak self] in self?.summon() }
+
         NotificationCenter.default.addObserver(
             forName: .mosaicAccessibilityPermissionChanged,
             object: nil,
@@ -53,6 +60,12 @@ final class TriggerController {
             pinchWatcher.start()
         } else {
             pinchWatcher.stop()
+        }
+
+        if prefs.f4Enabled && trusted {
+            f4Tap.start()
+        } else {
+            f4Tap.stop()
         }
     }
 }
