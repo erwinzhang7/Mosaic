@@ -63,7 +63,7 @@ struct FolderOpenView: View {
                         case .launch: onLaunch(item)
                         case .reveal: onReveal(item)
                         case .removeFromFolder: onRemove(item)
-                        case .rename, .hide: break
+                        case .rename, .hide, .uninstall: break
                         }
                     }
                 }

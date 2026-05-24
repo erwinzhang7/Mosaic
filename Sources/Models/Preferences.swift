@@ -56,6 +56,21 @@ final class Preferences {
         didSet { defaults.set(f4Enabled, forKey: Keys.f4Enabled) }
     }
 
+    // MARK: Uninstall
+
+    /// Master toggle for the destructive uninstall feature. When OFF, the
+    /// "Uninstall…" item doesn't appear in the app context menu at all.
+    var uninstallEnabled: Bool {
+        didSet { defaults.set(uninstallEnabled, forKey: Keys.uninstallEnabled) }
+    }
+
+    /// When ON, the uninstall flow computes the preview and goes through both
+    /// gates but the final "Move to Trash" call is a logging no-op. For
+    /// end-to-end exercise without deleting anything.
+    var uninstallSimulate: Bool {
+        didSet { defaults.set(uninstallSimulate, forKey: Keys.uninstallSimulate) }
+    }
+
     private init() {
         iconSize = (defaults.object(forKey: Keys.iconSize) as? Double) ?? 80
         columnMinWidth = (defaults.object(forKey: Keys.columnMinWidth) as? Double) ?? 112
@@ -69,6 +84,9 @@ final class Preferences {
         pinchDirection = PinchDirection(rawValue: defaults.string(forKey: Keys.pinchDirection) ?? "") ?? .open
 
         f4Enabled = (defaults.object(forKey: Keys.f4Enabled) as? Bool) ?? false
+
+        uninstallEnabled = (defaults.object(forKey: Keys.uninstallEnabled) as? Bool) ?? false
+        uninstallSimulate = (defaults.object(forKey: Keys.uninstallSimulate) as? Bool) ?? false
     }
 
     private enum Keys {
@@ -84,5 +102,8 @@ final class Preferences {
         static let pinchDirection = "pinchDirection"
 
         static let f4Enabled = "f4Enabled"
+
+        static let uninstallEnabled = "uninstallEnabled"
+        static let uninstallSimulate = "uninstallSimulate"
     }
 }

@@ -19,6 +19,10 @@ struct GridView: View {
     @State private var mode: OverlayMode = .apps
     @State private var windows: [WindowItem] = []
 
+    // Uninstall modal state. Non-nil only while the modal is on screen.
+    @State private var uninstallSet: UninstallSet?
+    @State private var uninstallError: String?
+
     private var iconSize: CGFloat { prefs.iconSize }
     private var columnMinWidth: CGFloat { prefs.columnMinWidth }
     private let columnSpacing: CGFloat = 24
@@ -97,6 +101,14 @@ struct GridView: View {
             if let item = renamingItem {
                 renameModal(for: item)
             }
+
+            if let set = uninstallSet {
+                uninstallModalView(for: set)
+            }
+
+            if let message = uninstallError {
+                uninstallErrorView(message)
+            }
         }
         .task {
             reload()
@@ -106,7 +118,9 @@ struct GridView: View {
             handleSummon()
         }
         .onExitCommand {
-            if renamingItem != nil { cancelRename() }
+            if uninstallError != nil { uninstallError = nil; Task { await restoreSearchFocus() } }
+            else if uninstallSet != nil { closeUninstall() }
+            else if renamingItem != nil { cancelRename() }
             else if openFolderID != nil { openFolderID = nil; Task { await restoreSearchFocus() } }
             else if !query.isEmpty { query = "" }
             else { onDismiss?() }
@@ -242,7 +256,8 @@ struct GridView: View {
                 item: item,
                 iconSize: iconSize,
                 context: .grid,
-                isHighlighted: item.bundleID == firstMatchBundleID
+                isHighlighted: item.bundleID == firstMatchBundleID,
+                uninstallEnabled: prefs.uninstallEnabled
             ) { action in
                 handle(action, for: item)
             }
@@ -337,7 +352,77 @@ struct GridView: View {
             reload()
         case .removeFromFolder:
             break  // handled in folder modal
+        case .uninstall:
+            beginUninstall(for: item)
         }
+    }
+
+    // MARK: Uninstall
+
+    private func beginUninstall(for item: AppItem) {
+        do {
+            uninstallSet = try Uninstaller.computeSet(for: item)
+            searchFocused = false
+        } catch {
+            uninstallError = error.localizedDescription
+        }
+    }
+
+    private func closeUninstall() {
+        uninstallSet = nil
+        Task { await restoreSearchFocus() }
+    }
+
+    private func uninstallModalView(for set: UninstallSet) -> some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                // Intentionally NO onTapGesture to dismiss — destructive
+                // operations should require explicit cancel via the buttons,
+                // not stray backdrop clicks.
+            UninstallModal(
+                set: set,
+                simulate: prefs.uninstallSimulate,
+                onConfirm: { confirmed in
+                    let result = Uninstaller.trash(confirmed, simulate: prefs.uninstallSimulate)
+                    if !result.simulated { reload() }
+                    return result
+                },
+                onClose: { closeUninstall() }
+            )
+        }
+        .transition(.opacity)
+    }
+
+    private func uninstallErrorView(_ message: String) -> some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .onTapGesture { uninstallError = nil; Task { await restoreSearchFocus() } }
+            VStack(spacing: 14) {
+                Image(systemName: "exclamationmark.shield")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.orange)
+                Text("Can't uninstall this app")
+                    .font(.title3.weight(.semibold))
+                Text(message)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .foregroundStyle(.secondary)
+                Button("OK") { uninstallError = nil; Task { await restoreSearchFocus() } }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: [])
+                    .keyboardShortcut(.escape, modifiers: [])
+            }
+            .padding(28)
+            .frame(width: 420)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.regularMaterial)
+                    .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+            )
+        }
+        .transition(.opacity)
     }
 
     private func reload() {
@@ -379,6 +464,8 @@ struct GridView: View {
         renamingItem = nil
         renameDraft = ""
         openFolderID = nil
+        uninstallSet = nil
+        uninstallError = nil
         // Default summon mode is always Apps — windows mode is opt-in per summon.
         mode = .apps
         // Windows enumeration is stale once we return to the overlay; drop it

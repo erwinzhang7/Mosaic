@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AppTile: View {
     enum Action {
-        case launch, reveal, rename, hide, removeFromFolder
+        case launch, reveal, rename, hide, removeFromFolder, uninstall
     }
 
     enum Context {
@@ -15,6 +15,9 @@ struct AppTile: View {
     var context: Context = .grid
     /// Drawn with a ring to mark it as the Return-key target.
     var isHighlighted: Bool = false
+    /// Whether to show the destructive "Uninstall…" menu item. Gated by the
+    /// master toggle in Preferences; off by default.
+    var uninstallEnabled: Bool = false
     let onAction: (Action) -> Void
 
     @State private var isHovering = false
@@ -65,6 +68,10 @@ struct AppTile: View {
         case .grid:
             Button("Rename…") { onAction(.rename) }
             Button("Hide") { onAction(.hide) }
+            if uninstallEnabled {
+                Divider()
+                Button("Uninstall…") { onAction(.uninstall) }
+            }
         case .folder:
             Button("Remove from Folder") { onAction(.removeFromFolder) }
         }

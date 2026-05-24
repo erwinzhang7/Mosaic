@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// overrides + custom source folders).
 struct SettingsView: View {
     enum Tab: String, Hashable {
-        case appearance, shortcut, triggers, sources, hidden, renames
+        case appearance, shortcut, triggers, sources, hidden, renames, uninstall
     }
 
     @State private var selection: Tab = .appearance
@@ -37,9 +37,66 @@ struct SettingsView: View {
             RenameSettings()
                 .tabItem { Label("Renames", systemImage: "pencil") }
                 .tag(Tab.renames)
+
+            UninstallSettings()
+                .tabItem { Label("Uninstall", systemImage: "trash") }
+                .tag(Tab.uninstall)
         }
         .padding(20)
-        .frame(width: 580, height: 460)
+        .frame(width: 580, height: 480)
+    }
+}
+
+// MARK: Uninstall
+
+private struct UninstallSettings: View {
+    @Bindable private var prefs = Preferences.shared
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Destructive — opt in deliberately", systemImage: "exclamationmark.triangle")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    Text("Uninstall moves the app bundle plus standard `~/Library` support files (matched strictly by bundle ID) to the Trash. Nothing is permanently deleted by Mosaic — items remain restorable until you empty Trash.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Master toggle") {
+                Toggle("Show \"Uninstall…\" in the app context menu", isOn: $prefs.uninstallEnabled)
+                Text("When off, the destructive menu item doesn't appear at all. Default is off.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Safety") {
+                Toggle("Simulation mode (don't actually trash, just log)", isOn: $prefs.uninstallSimulate)
+                Text("When on, the full preview + confirmation flow runs but the final \"Move to Trash\" call becomes a no-op that writes the would-trash list to the system log. Use this to exercise the feature against real bundles without anything moving.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("What's matched") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Mosaic only includes files in these standard per-app locations, matched on the app's bundle ID. Names are never fuzzy-matched.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("• ~/Library/Application Support/<bundleID>\n• ~/Library/Caches/<bundleID>\n• ~/Library/Preferences/<bundleID>.plist\n• ~/Library/Containers/<bundleID>\n• ~/Library/Group Containers/<bundleID>\n• ~/Library/Saved Application State/<bundleID>.savedState\n• ~/Library/Logs/<bundleID>\n• ~/Library/HTTPStorages/<bundleID>\n• ~/Library/WebKit/<bundleID>\n• ~/Library/Cookies/<bundleID>.binarycookies")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Refused") {
+                Text("Mosaic refuses to uninstall apps in /System, any bundle ID starting with com.apple., or anything outside /Applications and ~/Applications. Apps added via custom source folders aren't uninstallable from Mosaic.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 
