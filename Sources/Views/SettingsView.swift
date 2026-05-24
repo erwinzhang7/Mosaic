@@ -104,9 +104,40 @@ private struct UninstallSettings: View {
 
 private struct AppearanceSettings: View {
     @Bindable private var prefs = Preferences.shared
+    @Bindable private var loginItem = LoginItemController.shared
 
     var body: some View {
         Form {
+            Section("Startup") {
+                Toggle("Launch Mosaic at login", isOn: Binding(
+                    get: { loginItem.isEnabled },
+                    set: { loginItem.setEnabled($0) }
+                ))
+
+                switch loginItem.status {
+                case .requiresApproval:
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.shield")
+                            .foregroundStyle(.orange)
+                        Text("Needs your approval in System Settings ▸ General ▸ Login Items.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .notFound:
+                    Text("System Services couldn't locate Mosaic. Try relaunching after running the app once from /Applications.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                default:
+                    EmptyView()
+                }
+
+                if let err = loginItem.lastError {
+                    Text(err)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
             Section {
                 LabeledContent("Icon size") {
                     VStack(alignment: .leading) {
