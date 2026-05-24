@@ -14,6 +14,7 @@ struct GridView: View {
     @State private var renamingItem: AppItem?
     @State private var renameDraft: String = ""
     @State private var openFolderID: UUID?
+    @State private var folderBackdropTargeted = false
 
     // Windows mode state — enumeration runs on mode switch, not on a timer.
     @State private var mode: OverlayMode = .apps
@@ -318,12 +319,31 @@ struct GridView: View {
 
     private func folderModal(for folder: DisplayFolder) -> some View {
         ZStack {
-            Color.black.opacity(0.45)
+            Color.black.opacity(folderBackdropTargeted ? 0.6 : 0.45)
                 .ignoresSafeArea()
                 .onTapGesture {
                     openFolderID = nil
                     Task { await restoreSearchFocus() }
                 }
+                .dropDestination(for: String.self) { droppedIDs, _ in
+                    // Drop a folder-tile outside the panel = remove from folder.
+                    // Only honor drops that actually originated from this folder
+                    // (top-level drags can't reach here while the modal is up,
+                    // but be defensive).
+                    guard let bid = droppedIDs.first,
+                          folder.items.contains(where: { $0.bundleID == bid })
+                    else { return false }
+                    layout.removeFromFolder(bid, folderID: folder.id)
+                    // Folder may have been auto-pruned (last item removed).
+                    if !slots.contains(where: {
+                        if case .folder(let f) = $0 { return f.id == folder.id }
+                        return false
+                    }) {
+                        openFolderID = nil
+                        Task { await restoreSearchFocus() }
+                    }
+                    return true
+                } isTargeted: { folderBackdropTargeted = $0 }
             FolderOpenView(
                 folder: folder,
                 iconSize: iconSize,
