@@ -1,11 +1,22 @@
-// Rasterize an SVG into all the PNG sizes the macOS AppIcon catalog needs.
+// Rasterize an SVG into a set of PNG sizes for the macOS asset catalog.
 //
 // Usage:
-//   swift scripts/rasterize-icon.swift <input.svg> <output-dir>
+//   swift scripts/rasterize-icon.swift <input.svg> <output-dir> <prefix> <size1> [size2] ...
 //
-// Writes icon-{16,32,64,128,256,512,1024}.png into <output-dir>, overwriting
-// any existing files. Asset catalog Contents.json already references those
-// filenames, so this is a pure asset refresh — no other config to change.
+// Writes <prefix>-<size>.png into <output-dir> for each requested size,
+// overwriting any existing files. The matching Contents.json must already
+// reference those filenames — this script only produces the bitmaps.
+//
+// Examples:
+//   App icon:
+//     swift scripts/rasterize-icon.swift scripts/mosaic-icon-dark.svg \
+//       Sources/Resources/Assets.xcassets/AppIcon.appiconset \
+//       icon 16 32 64 128 256 512 1024
+//
+//   Menu-bar template image:
+//     swift scripts/rasterize-icon.swift scripts/mosaic-menubar-template.svg \
+//       Sources/Resources/Assets.xcassets/MenuBarIcon.imageset \
+//       menubar 18 36
 //
 // NSImage parses SVG natively on modern macOS via CoreSVG. A non-fatal
 // "CoreSVG has logged an error" warning is sometimes printed for SVGs that
@@ -14,19 +25,24 @@
 import AppKit
 import Foundation
 
-guard CommandLine.arguments.count >= 3 else {
-    FileHandle.standardError.write("usage: rasterize-icon.swift <input.svg> <output-dir>\n".data(using: .utf8)!)
+guard CommandLine.arguments.count >= 5 else {
+    FileHandle.standardError.write("usage: rasterize-icon.swift <input.svg> <output-dir> <prefix> <size1> [size2] ...\n".data(using: .utf8)!)
     exit(2)
 }
 let svgPath = CommandLine.arguments[1]
 let outDir = URL(fileURLWithPath: CommandLine.arguments[2])
+let prefix = CommandLine.arguments[3]
+let sizes: [Int] = CommandLine.arguments.dropFirst(4).compactMap(Int.init)
+
+guard !sizes.isEmpty else {
+    FileHandle.standardError.write("no valid sizes provided\n".data(using: .utf8)!)
+    exit(2)
+}
 
 guard let source = NSImage(contentsOfFile: svgPath) else {
     FileHandle.standardError.write("NSImage couldn't load \(svgPath)\n".data(using: .utf8)!)
     exit(1)
 }
-
-let sizes: [Int] = [16, 32, 64, 128, 256, 512, 1024]
 
 try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
@@ -57,7 +73,7 @@ for size in sizes {
     NSGraphicsContext.restoreGraphicsState()
 
     guard let png = rep.representation(using: .png, properties: [:]) else { exit(1) }
-    let url = outDir.appending(path: "icon-\(size).png")
+    let url = outDir.appending(path: "\(prefix)-\(size).png")
     try png.write(to: url)
     print("wrote \(url.path)")
 }

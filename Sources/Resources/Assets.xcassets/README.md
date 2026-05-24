@@ -32,23 +32,22 @@ this catalog as the bundle icon. Replacing the icon is a pure asset
 operation: drop in a new SVG (same path) and re-run the rasterizer, or
 hand-author PNGs at the filenames above.
 
-### Menu-bar glyph (separate from the app icon)
+### MenuBarIcon (the menu-bar status item glyph)
 
-The menu-bar status item uses an SF Symbol —
-`NSImage(systemSymbolName: "square.grid.3x3.fill", ...)` — set in
-`Sources/App/AppDelegate.swift` (`installStatusItem`). SF Symbols are
-auto-template-rendered, so they adapt correctly to light/dark menu bars
-without any extra work.
+Custom template image set rasterized from
+`scripts/mosaic-menubar-template.svg`. Black-on-transparent at 18pt 1× and
+36pt 2×; the imageset's `Contents.json` marks it `template-rendering-intent`
+so the system inverts it for light/dark menu bars automatically.
 
-To swap the menu-bar glyph: either change the `systemSymbolName` argument
-to a different SF Symbol, or replace it with a custom template image:
+Regenerate after editing the SVG:
 
-```swift
-let img = NSImage(named: "MenuBarIcon")
-img?.isTemplate = true   // critical — without this it won't adapt
-button.image = img
+```bash
+swift scripts/rasterize-icon.swift scripts/mosaic-menubar-template.svg \
+  Sources/Resources/Assets.xcassets/MenuBarIcon.imageset \
+  menubar 18 36
 ```
 
-If you go the custom-image route, add a `MenuBarIcon` image set to this
-catalog with a single black-on-transparent PNG (the system handles the
-inversion). Keep it small — 18×18pt at 1× / 36×36 at 2× is typical.
+`Sources/App/AppDelegate.swift` (`installStatusItem`) loads it via
+`NSImage(named: "MenuBarIcon")`. To swap back to an SF Symbol, replace the
+two `NSImage(named:)` lines with
+`NSImage(systemSymbolName: "<name>", accessibilityDescription: "Mosaic")`.
