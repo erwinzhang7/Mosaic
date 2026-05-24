@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Search "pill" that fades in once the user starts typing.
-/// Stays in the layout tree so the grid below doesn't jump.
+/// Search pill shown throughout the overlay lifetime.
 struct SearchField: View {
     @Binding var text: String
     var focused: FocusState<Bool>.Binding
@@ -20,8 +19,5 @@ struct SearchField: View {
         .background(
             Capsule().fill(Color.primary.opacity(0.08))
         )
-        .opacity(text.isEmpty ? 0 : 1)
-        .allowsHitTesting(!text.isEmpty)
-        .animation(.easeOut(duration: 0.12), value: text.isEmpty)
     }
 }

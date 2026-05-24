@@ -57,23 +57,35 @@ struct GridView: View {
         return nil
     }
 
-    /// Slots filtered by the live search. Folders are kept if their name
-    /// matches OR any contained app does.
+    /// Slots filtered and ranked by the live search. A folder match retains
+    /// all contents; a child-only match narrows the displayed contents.
     private var visibleSlots: [DisplaySlot] {
         let trimmed = trimmedQuery
         guard !trimmed.isEmpty else { return slots }
-        return slots.compactMap { slot in
+        return slots.enumerated().compactMap { offset, slot -> (Int, Int, DisplaySlot)? in
             switch slot {
             case .app(let item):
-                return item.displayName.localizedCaseInsensitiveContains(trimmed) ? slot : nil
+                guard let score = SearchMatcher.score(item.displayName, query: trimmed) else { return nil }
+                return (offset, score, slot)
             case .folder(let folder):
-                let nameMatch = folder.name.localizedCaseInsensitiveContains(trimmed)
-                let matchingItems = folder.items.filter { $0.displayName.localizedCaseInsensitiveContains(trimmed) }
-                if nameMatch { return slot }
-                if matchingItems.isEmpty { return nil }
-                return .folder(.init(id: folder.id, name: folder.name, items: matchingItems))
+                let nameScore = SearchMatcher.score(folder.name, query: trimmed)
+                let matchingItems = folder.items.compactMap { item -> (AppItem, Int)? in
+                    guard let score = SearchMatcher.score(item.displayName, query: trimmed) else { return nil }
+                    return (item, score)
+                }
+                let itemScore = matchingItems.map { $0.1 }.max()
+                guard let score = [nameScore, itemScore].compactMap({ $0 }).max() else { return nil }
+                if nameScore != nil {
+                    return (offset, score, slot)
+                }
+                let narrowed = matchingItems.map(\.0)
+                return (offset, score, .folder(.init(id: folder.id, name: folder.name, items: narrowed)))
             }
         }
+        .sorted { lhs, rhs in
+            lhs.1 == rhs.1 ? lhs.0 < rhs.0 : lhs.1 > rhs.1
+        }
+        .map { $0.2 }
     }
 
     private var openFolder: DisplayFolder? {
@@ -89,10 +101,16 @@ struct GridView: View {
     private var filteredWindows: [WindowItem] {
         let q = trimmedQuery
         guard !q.isEmpty else { return windows }
-        return windows.filter {
-            $0.displayTitle.localizedCaseInsensitiveContains(q)
-                || $0.ownerName.localizedCaseInsensitiveContains(q)
+        return windows.enumerated().compactMap { offset, item -> (Int, Int, WindowItem)? in
+            let titleScore = SearchMatcher.score(item.displayTitle, query: q)
+            let ownerScore = SearchMatcher.score(item.ownerName, query: q)
+            guard let score = [titleScore, ownerScore].compactMap({ $0 }).max() else { return nil }
+            return (offset, score, item)
         }
+        .sorted { lhs, rhs in
+            lhs.1 == rhs.1 ? lhs.0 < rhs.0 : lhs.1 > rhs.1
+        }
+        .map { $0.2 }
     }
 
     private var firstWindowMatchID: CGWindowID? {
