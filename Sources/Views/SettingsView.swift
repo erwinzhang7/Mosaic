@@ -284,8 +284,8 @@ private struct TriggersSettings: View {
 
     @ViewBuilder
     private var f4Section: some View {
-        Section("F4 key") {
-            Toggle("Summon with F4 (Launchpad key)", isOn: $prefs.f4Enabled)
+        Section("Search / F4 key") {
+            Toggle("Summon with the Search / F4 key", isOn: $prefs.f4Enabled)
                 .onChange(of: prefs.f4Enabled) { _, new in
                     if new && !permission.isTrusted { permission.requestPrompt() }
                     TriggerController.shared.applyCurrentSettings()
@@ -298,7 +298,7 @@ private struct TriggersSettings: View {
                         .foregroundStyle(.orange)
                 }
 
-                Text("Uses a CGEventTap to intercept F4 and swallow it before macOS fires Launchpad. **Caveat:** on most Apple keyboards F4 is the Launchpad/Spotlight media key. macOS swallows it before any tap can see it unless you either enable “Use F1, F2, etc. keys as standard function keys” in System Settings ▸ Keyboard, **or** press Fn+F4. If neither works, that's an OS-level limitation — there's no clean way around it without private API.")
+                Text("Intercepts the 🔍 / F4 key at the HID level via a CGEventTap so Mosaic summons **instead of** Spotlight or Launchpad. While this toggle is ON, that key will not open Spotlight — turn it off here to restore normal behavior.\n\n**Tested on:** 2026 MacBook Pro M5 Max running macOS 26.4. Not validated on other keyboards or macOS versions — third-party keyboards may emit different codes, and Apple could change the routing in a future macOS release without notice.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -1,27 +1,34 @@
+import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
 import CoreGraphics
 import Foundation
 import Observation
 
-/// Opt-in summon trigger that intercepts the F4 key (kVK_F4 = 118) via a
-/// `CGEventTap`.
+/// Opt-in summon trigger that intercepts the Search / F4 key via a
+/// `CGEventTap` at the HID level.
 ///
-/// F4 is the Launchpad/Spotlight key on most Apple keyboards. By default
-/// macOS swallows it as a media-key event and fires the system action before
-/// any tap can see it — the user has to either enable "Use F1, F2, etc. keys
-/// as standard function keys" in System Settings ▸ Keyboard, OR press Fn+F4,
-/// for the actual F4 keycode (118) to reach this tap.
+/// On a modern Apple keyboard (the F4 key is now engraved 🔍), pressing it
+/// emits an `NSSystemDefined` event carrying `NX_KEYTYPE_SPOTLIGHT` rather
+/// than a normal keyDown for keycode 118. macOS routes that to Spotlight
+/// at a layer above session-level event taps. To catch it before Spotlight
+/// does, we tap at `cghidEventTap` and listen for both `keyDown` (legacy
+/// F4 hardware) and `NSSystemDefined` (modern Search key + the older
+/// Launchpad key).
 ///
-/// When the tap *does* see it we consume the event (return nil from the
-/// callback) so macOS doesn't also fire Launchpad. When the tap *can't* see
-/// it, that's an OS-level limitation — we can't intercept media-key events
-/// without escalating to private API.
+/// When the toggle is on, pressing the Search key triggers Mosaic AND
+/// Spotlight stops opening from that key for as long as Mosaic runs.
+/// That's the explicit, opted-in trade. Disable the toggle (Settings ▸
+/// Triggers) to restore normal Spotlight behavior.
+///
+/// **Tested on:** 2026 MacBook Pro M5 Max, macOS 26.4. Not validated on
+/// other keyboards or macOS versions — third-party keyboards may emit
+/// different event codes, and Apple could change the routing in a future
+/// macOS release without warning.
 ///
 /// **Quarantined**: this is the only place in Mosaic that uses CGEventTap.
 /// Permission checking is handled by the shared `AccessibilityPermission`
 /// helper; `TriggerController` decides when to call `start()` / `stop()`.
-/// Pulling this file out should not break anything else.
 @MainActor
 @Observable
 final class F4EventTap {
@@ -32,7 +39,7 @@ final class F4EventTap {
     /// Human-readable description of the most recent failure, or nil.
     private(set) var lastFailure: String?
 
-    /// Invoked on the main actor when F4 is captured.
+    /// Invoked on the main actor when the Search/F4 key is captured.
     /// `TriggerController` wires this to the overlay toggle.
     @ObservationIgnored var onTrigger: () -> Void = {}
 
@@ -42,22 +49,35 @@ final class F4EventTap {
     @ObservationIgnored private nonisolated(unsafe) var tap: CFMachPort?
     @ObservationIgnored private nonisolated(unsafe) var source: CFRunLoopSource?
 
-    /// Carbon kVK_F4 = 118. The value CGEvent reports for the F4 key when it
-    /// actually reaches a tap (i.e. as standard function key, not media key).
+    /// Carbon kVK_F4 = 118. Reported as a normal keyDown by legacy hardware
+    /// when "Use F1, F2, etc. as standard function keys" is on, or via Fn+F4.
     private static let f4KeyCode: Int64 = Int64(kVK_F4)
+
+    /// IOKit NX_KEYTYPE_* constants for the special media keys we care about.
+    /// Hardcoded rather than imported via `IOKit.hidsystem` so the compile
+    /// stays clean of cross-module Sendable noise. Values are stable.
+    private static let nxKeyTypeSpotlight: Int = 90   // 🔍 on modern keyboards
+    private static let nxKeyTypeLaunchpad: Int = 131  // older "show all apps" key
+
+    /// NSEvent.SubType.aux (kIOHIDEventTypeKeyboard) — the subtype value
+    /// systemDefined events use to carry NX_KEYTYPE_* codes.
+    private static let nxSubtypeAuxControlButtons: Int = 8
 
     @discardableResult
     func start() -> Bool {
         if isInstalled { return true }
 
-        let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        // `.cghidEventTap` (HID level) sees raw events before macOS routes
+        // them to system actions like Spotlight. Required for the Search key.
+        // `.defaultTap` = active (can consume).
+        let mask = CGEventMask(
+            (1 << CGEventType.keyDown.rawValue) |
+            (1 << UInt64(NSEvent.EventType.systemDefined.rawValue))
+        )
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
 
-        // `.defaultTap` = active (can consume), as opposed to listen-only.
-        // `.headInsertEventTap` = see events before other taps further down
-        // the chain. `.cgSessionEventTap` = events for the login session.
         guard let newTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
+            tap: .cghidEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: mask,
@@ -100,8 +120,6 @@ final class F4EventTap {
     }
 
     deinit {
-        // Best-effort cleanup in case `stop()` was never called. Avoids
-        // leaving a zombie tap registered on the run loop.
         teardown()
     }
 
@@ -123,13 +141,32 @@ final class F4EventTap {
             return Unmanaged.passUnretained(event)
         }
 
+        // Legacy F4 hardware path: keycode 118 as a normal keyDown.
         if type == .keyDown {
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
             if keyCode == F4EventTap.f4KeyCode {
                 me.fireOnMain()
-                // Consume so macOS doesn't also fire Launchpad / whatever
-                // the user has bound. Intentional — that's the whole point.
                 return nil
+            }
+        }
+
+        // Modern Search-key path: NSSystemDefined event, subtype 8, with the
+        // NX_KEYTYPE_* code packed into the upper 16 bits of data1. We
+        // act on key-DOWN only (state == 0x0A) to avoid firing twice per
+        // press; the matching up event is allowed to pass through harmlessly
+        // since nobody else cares about it once we've consumed the down.
+        if type.rawValue == UInt32(NSEvent.EventType.systemDefined.rawValue) {
+            if let nsEvent = NSEvent(cgEvent: event),
+               nsEvent.subtype.rawValue == Int16(F4EventTap.nxSubtypeAuxControlButtons) {
+                let data1 = nsEvent.data1
+                let keyType = (data1 & 0xFFFF0000) >> 16
+                let keyState = (data1 & 0x0000FF00) >> 8
+                let isDown = (keyState == 0x0A)
+                if isDown && (keyType == F4EventTap.nxKeyTypeSpotlight
+                              || keyType == F4EventTap.nxKeyTypeLaunchpad) {
+                    me.fireOnMain()
+                    return nil // consume — Spotlight / Launchpad won't fire
+                }
             }
         }
 
