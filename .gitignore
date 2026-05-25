@@ -29,3 +29,6 @@ Package.resolved
 
 # Claude Code local state
 .claude/
+
+# Release artifacts produced by scripts/release.sh
+Mosaic-*.zip
