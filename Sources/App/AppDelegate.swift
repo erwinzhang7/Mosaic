@@ -187,14 +187,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if now - lastSelfActivation < 0.5 { return }
 
         // Defer a tick so any window opening alongside this activation
-        // (Settings) can become visible. If another window of ours is up,
-        // the activation was for opening that — not a Dock click — so skip.
+        // (Settings) can become key. Use keyWindow rather than "any visible
+        // window" — NSApp.windows includes SwiftUI's MenuBarExtra and the
+        // internal status-bar window, which would always make hasOtherWindow
+        // true and prevent the summon. keyWindow is the user-facing focus
+        // target: Settings is key when open, status-bar chrome never is.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(100))
-            let hasOtherWindow = NSApp.windows.contains { window in
-                !(window is OverlayWindow) && window.isVisible
+            if let key = NSApp.keyWindow, !(key is OverlayWindow) {
+                return // Settings or another foreground window — not a Dock click
             }
-            if hasOtherWindow { return }
             self.toggleOverlay()
         }
     }
