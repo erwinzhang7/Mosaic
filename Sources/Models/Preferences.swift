@@ -40,22 +40,6 @@ final class Preferences {
         didSet { defaults.set(hotCornerDwell, forKey: Keys.hotCornerDwell) }
     }
 
-    // MARK: Pinch trigger
-
-    var pinchEnabled: Bool {
-        didSet { defaults.set(pinchEnabled, forKey: Keys.pinchEnabled) }
-    }
-
-    var pinchDirection: PinchDirection {
-        didSet { defaults.set(pinchDirection.rawValue, forKey: Keys.pinchDirection) }
-    }
-
-    // MARK: F4 trigger
-
-    var f4Enabled: Bool {
-        didSet { defaults.set(f4Enabled, forKey: Keys.f4Enabled) }
-    }
-
     // MARK: Uninstall
 
     /// Master toggle for the destructive uninstall feature. When OFF, the
@@ -80,11 +64,6 @@ final class Preferences {
         hotCorner = HotCorner(rawValue: defaults.string(forKey: Keys.hotCorner) ?? "") ?? .topLeft
         hotCornerDwell = (defaults.object(forKey: Keys.hotCornerDwell) as? Double) ?? 0.2
 
-        pinchEnabled = (defaults.object(forKey: Keys.pinchEnabled) as? Bool) ?? false
-        pinchDirection = PinchDirection(rawValue: defaults.string(forKey: Keys.pinchDirection) ?? "") ?? .open
-
-        f4Enabled = (defaults.object(forKey: Keys.f4Enabled) as? Bool) ?? false
-
         uninstallEnabled = (defaults.object(forKey: Keys.uninstallEnabled) as? Bool) ?? false
         uninstallSimulate = (defaults.object(forKey: Keys.uninstallSimulate) as? Bool) ?? false
     }
@@ -97,11 +76,6 @@ final class Preferences {
         static let hotCornerEnabled = "hotCornerEnabled"
         static let hotCorner = "hotCorner"
         static let hotCornerDwell = "hotCornerDwell"
-
-        static let pinchEnabled = "pinchEnabled"
-        static let pinchDirection = "pinchDirection"
-
-        static let f4Enabled = "f4Enabled"
 
         static let uninstallEnabled = "uninstallEnabled"
         static let uninstallSimulate = "uninstallSimulate"

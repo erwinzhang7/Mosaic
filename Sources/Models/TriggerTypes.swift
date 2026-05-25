@@ -13,16 +13,3 @@ enum HotCorner: String, CaseIterable, Codable, Sendable {
         }
     }
 }
-
-/// Pinch direction that triggers the summon: "open" is the spreading gesture
-/// (typical zoom-in), "closed" is the pinching-in gesture (typical zoom-out).
-enum PinchDirection: String, CaseIterable, Codable, Sendable {
-    case open, closed
-
-    var label: String {
-        switch self {
-        case .open:   return "Pinch open (spread)"
-        case .closed: return "Pinch closed"
-        }
-    }
-}

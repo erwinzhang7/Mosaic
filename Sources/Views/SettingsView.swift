@@ -206,9 +206,9 @@ private struct TriggersSettings: View {
             if !permission.isTrusted {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("Hot corners and pinch need Accessibility permission.", systemImage: "exclamationmark.shield")
+                        Label("Hot corner needs Accessibility permission.", systemImage: "exclamationmark.shield")
                             .font(.callout)
-                        Text("Grant it once and Mosaic can see the global cursor and pinch stream. The hotkey, search, and launching work without it.")
+                        Text("Grant it once and Mosaic can poll the global cursor position. The hotkey, search, and launching work without it.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         HStack {
@@ -254,55 +254,13 @@ private struct TriggersSettings: View {
                 }
             }
 
-            Section("Pinch gesture") {
-                Toggle("Summon with a trackpad pinch", isOn: $prefs.pinchEnabled)
-                    .onChange(of: prefs.pinchEnabled) { _, new in
-                        if new && !permission.isTrusted { permission.requestPrompt() }
-                        TriggerController.shared.applyCurrentSettings()
-                    }
-
-                if prefs.pinchEnabled {
-                    Picker("Direction", selection: $prefs.pinchDirection) {
-                        ForEach(PinchDirection.allCases, id: \.self) { d in
-                            Text(d.label).tag(d)
-                        }
-                    }
-                    .onChange(of: prefs.pinchDirection) { _, _ in TriggerController.shared.applyCurrentSettings() }
-
-                    Text("One gesture = one summon. Pinch in your chosen direction past the recognition threshold.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            f4Section
-        }
-        .formStyle(.grouped)
-    }
-
-    private var f4Tap: F4EventTap { TriggerController.shared.f4Tap }
-
-    @ViewBuilder
-    private var f4Section: some View {
-        Section("Search / F4 key") {
-            Toggle("Summon with the Search / F4 key", isOn: $prefs.f4Enabled)
-                .onChange(of: prefs.f4Enabled) { _, new in
-                    if new && !permission.isTrusted { permission.requestPrompt() }
-                    TriggerController.shared.applyCurrentSettings()
-                }
-
-            if prefs.f4Enabled {
-                if permission.isTrusted && !f4Tap.isInstalled {
-                    Label(f4Tap.lastFailure ?? "Event tap didn't install. Toggle this off and on, or relaunch Mosaic.", systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-
-                Text("Intercepts the 🔍 / F4 key at the HID level via a CGEventTap so Mosaic summons **instead of** Spotlight or Launchpad. While this toggle is ON, that key will not open Spotlight — turn it off here to restore normal behavior.\n\n**Tested on:** 2026 MacBook Pro M5 Max running macOS 26.4. Not validated on other keyboards or macOS versions — third-party keyboards may emit different codes, and Apple could change the routing in a future macOS release without notice.")
+            Section {
+                Text("Looking for the F4 / Search key and 4-finger pinch triggers? They were removed in this build. macOS 26 routes those gestures at the WindowServer layer before any public-API event tap can see them — implementing them reliably would require the private `MultitouchSupport` framework, which we deliberately don't ship. Use the hotkey, hot corner, or the menu-bar's \"Show Mosaic\" item instead.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
+        .formStyle(.grouped)
     }
 }
 

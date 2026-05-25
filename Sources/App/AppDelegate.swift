@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setup()
     }
 
-    // MARK: Triggers (hot corner, pinch)
+    // MARK: Triggers (hot corner)
 
     private func installTriggers() {
         TriggerController.shared.summon = { [weak self] in self?.toggleOverlay() }
