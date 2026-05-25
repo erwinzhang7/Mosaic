@@ -25,6 +25,15 @@ final class Preferences {
         didSet { defaults.set(verticalScroll, forKey: Keys.verticalScroll) }
     }
 
+    /// Whether Mosaic shows its icon in the menu bar. When off, the only
+    /// way to summon is the hotkey, a Dock click, or opening the .app —
+    /// re-enable by running
+    /// `defaults write com.erwinzhang.mosaic showMenuBarIcon -bool true`
+    /// and relaunching.
+    var showMenuBarIcon: Bool {
+        didSet { defaults.set(showMenuBarIcon, forKey: Keys.showMenuBarIcon) }
+    }
+
     // MARK: Hot corner trigger
 
     var hotCornerEnabled: Bool {
@@ -59,6 +68,7 @@ final class Preferences {
         iconSize = (defaults.object(forKey: Keys.iconSize) as? Double) ?? 80
         columnMinWidth = (defaults.object(forKey: Keys.columnMinWidth) as? Double) ?? 112
         verticalScroll = (defaults.object(forKey: Keys.verticalScroll) as? Bool) ?? true
+        showMenuBarIcon = (defaults.object(forKey: Keys.showMenuBarIcon) as? Bool) ?? true
 
         hotCornerEnabled = (defaults.object(forKey: Keys.hotCornerEnabled) as? Bool) ?? false
         hotCorner = HotCorner(rawValue: defaults.string(forKey: Keys.hotCorner) ?? "") ?? .topLeft
@@ -72,6 +82,7 @@ final class Preferences {
         static let iconSize = "iconSize"
         static let columnMinWidth = "columnMinWidth"
         static let verticalScroll = "verticalScroll"
+        static let showMenuBarIcon = "showMenuBarIcon"
 
         static let hotCornerEnabled = "hotCornerEnabled"
         static let hotCorner = "hotCorner"

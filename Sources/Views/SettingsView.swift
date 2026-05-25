@@ -138,6 +138,13 @@ private struct AppearanceSettings: View {
                 }
             }
 
+            Section("Menu bar") {
+                Toggle("Show Mosaic in the menu bar", isOn: $prefs.showMenuBarIcon)
+                Text("Off hides the menu-bar icon. Summon still works via your hotkey or by clicking Mosaic in the Dock. To re-enable if you change your mind, run\n`defaults write com.erwinzhang.mosaic showMenuBarIcon -bool true`\nand relaunch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 LabeledContent("Icon size") {
                     VStack(alignment: .leading) {

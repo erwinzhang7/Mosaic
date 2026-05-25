@@ -10,6 +10,7 @@ struct MosaicApp: App {
     // NSApp.delegate ourselves in App.init() (which runs before AppKit's
     // launch sequence) is reliable.
     private let appDelegate: AppDelegate
+    @Bindable private var prefs = Preferences.shared
 
     @MainActor
     init() {
@@ -23,7 +24,7 @@ struct MosaicApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("Mosaic", image: "MenuBarIcon") {
+        MenuBarExtra("Mosaic", image: "MenuBarIcon", isInserted: $prefs.showMenuBarIcon) {
             Button("Show Mosaic") {
                 appDelegate.toggleOverlay()
             }
