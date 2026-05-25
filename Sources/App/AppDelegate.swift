@@ -87,6 +87,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setup()
     }
 
+    /// Canonical reopen hook. SwiftUI delegates through to this method, so —
+    /// unlike the raw `kAEReopenApplication` AppleEvent handler, which SwiftUI
+    /// re-registers over ours on every scene re-evaluation — this stays wired
+    /// for the life of the process. Covers Dock-shortcut clicks and Finder
+    /// double-clicks on the .app when Mosaic is already running.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        let now = CACurrentMediaTime()
+        if now - lastExternalActivationHandled < 0.5 { return false }
+        lastExternalActivationHandled = now
+        toggleOverlay()
+        return false
+    }
+
     // MARK: Triggers (hot corner)
 
     private func installTriggers() {
