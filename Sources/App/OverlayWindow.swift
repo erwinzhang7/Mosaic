@@ -119,13 +119,25 @@ final class OverlayWindow: NSWindow {
         // Set the frame BEFORE making key so the responder chain attaches on
         // the right screen — important for multi-monitor focus.
         setFrame(screen.frame, display: true)
+
+        // Smooth fade-in. Start invisible, bring to front, then animate alpha.
+        // Dismiss stays snappy (instant orderOut) — entry-only easing.
+        alphaValue = 0
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.22
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            animator().alphaValue = 1
+        }
     }
 
     func dismiss() {
         guard isVisible || returnToApp != nil else { return }
         orderOut(nil)
+        // Reset alpha so the next show starts from a known state even if a
+        // fade-in animation was interrupted by a rapid dismiss.
+        alphaValue = 1
         // Clear before activating: activating the other app makes us resign
         // active, which triggers AppDelegate's observer to call dismiss()
         // again. With returnToApp cleared, that re-entry is a no-op.

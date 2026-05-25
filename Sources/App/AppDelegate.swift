@@ -39,20 +39,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installHotKey()
         installTriggers()
         observeAppActivation()
+        registerReopenHandler()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setup()
     }
 
-    /// Fires when the user clicks Mosaic's pinned Dock icon (or re-opens the
-    /// .app while a copy is already running). We treat it as a summon — same
-    /// effect as the hotkey. Returning false tells AppKit we've handled it
-    /// so it doesn't try its default re-open behavior (which is a no-op
-    /// for LSUIElement apps anyway).
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+    /// Register a direct AppleEvent handler for `kAEReopenApplication`
+    /// (sent when the user clicks Mosaic's pinned Dock icon while a
+    /// copy is already running). NSApplicationDelegate's standard
+    /// `applicationShouldHandleReopen` doesn't dispatch reliably for
+    /// `.accessory` (LSUIElement) apps on macOS 26 — registering at the
+    /// AppleEvent layer bypasses the delegate route and works regardless.
+    private func registerReopenHandler() {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleReopenEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEReopenApplication)
+        )
+    }
+
+    @objc private func handleReopenEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
         toggleOverlay()
-        return false
     }
 
     // MARK: Triggers (hot corner)
