@@ -21,6 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let startupTime: TimeInterval = CACurrentMediaTime()
     private var lastSelfActivation: TimeInterval = 0
 
+    /// Most recent time a Dock/Finder summon was handled — used to dedup
+    /// across the didBecomeActive path and the AppleEvent path which both
+    /// fire on the same click. Either may arrive first; the other gets
+    /// skipped if within 0.5s.
+    private var lastExternalActivationHandled: TimeInterval = 0
+
     override init() {
         super.init()
         Self.shared = self
@@ -45,6 +51,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installHotKey()
         installTriggers()
         observeAppActivation()
+
+        // Re-install the kAEReopenApplication handler AFTER SwiftUI's own
+        // App init has finished. Registering in this same setup() (which
+        // runs from MosaicApp.init synchronously) gets overridden by
+        // SwiftUI's later registration. A 1s deferred install puts us last
+        // in line so our handler wins. The AppleEvent route catches Dock
+        // clicks while the app is ALREADY active, which didBecomeActive
+        // can't see (no inactive→active transition).
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            self.registerReopenHandler()
+        }
+    }
+
+    private func registerReopenHandler() {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleReopenEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEReopenApplication)
+        )
+    }
+
+    @objc private func handleReopenEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        let now = CACurrentMediaTime()
+        // Dedup with the didBecomeActive path — on cold clicks both routes
+        // fire for the same event.
+        if now - lastExternalActivationHandled < 0.5 { return }
+        lastExternalActivationHandled = now
+        toggleOverlay()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -197,6 +233,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let key = NSApp.keyWindow, !(key is OverlayWindow) {
                 return // Settings or another foreground window — not a Dock click
             }
+            // Dedup with the AppleEvent path which may have fired for the
+            // same physical click.
+            let now2 = CACurrentMediaTime()
+            if now2 - self.lastExternalActivationHandled < 0.5 { return }
+            self.lastExternalActivationHandled = now2
             self.toggleOverlay()
         }
     }
