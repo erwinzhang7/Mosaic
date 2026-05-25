@@ -15,6 +15,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlay: OverlayWindow?
     private var setupComplete = false
 
+    /// Timestamps used by the didBecomeActive observer to tell apart "user
+    /// clicked our Dock icon / opened the .app" (treat as summon) from
+    /// "we just activated ourselves" or "this is the cold-launch activation".
+    private let startupTime: TimeInterval = CACurrentMediaTime()
+    private var lastSelfActivation: TimeInterval = 0
+
     override init() {
         super.init()
         Self.shared = self
@@ -39,30 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installHotKey()
         installTriggers()
         observeAppActivation()
-        registerReopenHandler()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setup()
-    }
-
-    /// Register a direct AppleEvent handler for `kAEReopenApplication`
-    /// (sent when the user clicks Mosaic's pinned Dock icon while a
-    /// copy is already running). NSApplicationDelegate's standard
-    /// `applicationShouldHandleReopen` doesn't dispatch reliably for
-    /// `.accessory` (LSUIElement) apps on macOS 26 — registering at the
-    /// AppleEvent layer bypasses the delegate route and works regardless.
-    private func registerReopenHandler() {
-        NSAppleEventManager.shared().setEventHandler(
-            self,
-            andSelector: #selector(handleReopenEvent(_:withReplyEvent:)),
-            forEventClass: AEEventClass(kCoreEventClass),
-            andEventID: AEEventID(kAEReopenApplication)
-        )
-    }
-
-    @objc private func handleReopenEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
-        toggleOverlay()
     }
 
     // MARK: Triggers (hot corner)
@@ -97,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
             ?? NSScreen.main
             ?? NSScreen.screens.first!
+        // Record before showOn so the didBecomeActive triggered by our own
+        // NSApp.activate (inside showOn) is recognised as self-initiated and
+        // not re-routed back through toggleOverlay.
+        lastSelfActivation = CACurrentMediaTime()
         overlay?.showOn(screen)
     }
 
@@ -171,6 +161,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in
                 ToastWindow.show(message: "Couldn't open \(name) — it may have been moved or deleted.")
             }
+        }
+
+        // External-activation observer: when something else makes us active
+        // (Dock click, Finder double-click on the .app, `open` from a
+        // terminal), summon the overlay. SwiftUI's runtime overrides our
+        // AppleEvent handlers for kAEReopenApplication on .accessory apps,
+        // so reopen-events don't reach us — but activation always does.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.handleAppActivation() }
+        }
+    }
+
+    private func handleAppActivation() {
+        let now = CACurrentMediaTime()
+        // Startup grace — cold launch (especially login-launched) often
+        // activates briefly; don't summon on first boot.
+        if now - startupTime < 2.0 { return }
+        // Self-initiated — we just called NSApp.activate ourselves
+        // (showOverlay, openSettings); ignore the resulting activation.
+        if now - lastSelfActivation < 0.5 { return }
+
+        // Defer a tick so any window opening alongside this activation
+        // (Settings) can become visible. If another window of ours is up,
+        // the activation was for opening that — not a Dock click — so skip.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            let hasOtherWindow = NSApp.windows.contains { window in
+                !(window is OverlayWindow) && window.isVisible
+            }
+            if hasOtherWindow { return }
+            self.toggleOverlay()
         }
     }
 }
