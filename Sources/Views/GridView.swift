@@ -28,11 +28,11 @@ struct GridView: View {
     // AND there's no active search.
     @State private var currentPageID: Int?
     @State private var topSafeInset: CGFloat = 0
-
-    /// Slots-per-page for the horizontal paged layout. Conservative default
-    /// that reads well on most displays. Not adaptive to window size yet;
-    /// that's a future polish.
-    private let tilesPerPage = 35
+    /// Tiles per page in the horizontal layout, computed from the paged
+    /// container's geometry. Persisted in @State so the arrow-key monitor
+    /// (which runs outside the SwiftUI body) can read the latest value.
+    @State private var pagedTilesPerPage: Int = 35
+    @State private var arrowKeyMonitor = ArrowKeyMonitorBox()
 
     private var iconSize: CGFloat { prefs.iconSize }
     private var columnMinWidth: CGFloat { prefs.columnMinWidth }
@@ -144,10 +144,17 @@ struct GridView: View {
         }
         .task {
             reload()
+            installArrowKeyMonitor()
         }
         .onChange(of: layout.state.customSources) { _, _ in reload() }
         .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayDidBecomeKey)) { _ in
             handleSummon()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mosaicOverlayBackgroundClick)) { _ in
+            // AppKit catch-all dismiss path (see OverlayWindow.sendEvent).
+            // handleBackgroundClick already guards against firing while a
+            // modal is up.
+            handleBackgroundClick()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
             topSafeInset = NSScreen.main?.safeAreaInsets.top ?? 0
@@ -191,6 +198,17 @@ struct GridView: View {
                 }
             }
         }
+        // Dismiss layer behind mainContent. The ZStack's outer Color.clear
+        // doesn't catch clicks inside the ScrollView's empty content area
+        // (ScrollView absorbs them for its own gesture system). This
+        // .background sits within mainContent's frame so those clicks fall
+        // through to it instead. Tiles / picker / search still consume
+        // their own clicks above this.
+        .background(
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { handleBackgroundClick() }
+        )
     }
 
     private var modeSwitcher: some View {
@@ -255,14 +273,19 @@ struct GridView: View {
     }
 
     private var appsPagedGrid: some View {
-        let pages = paginated(visibleSlots)
-        return VStack(spacing: 8) {
-            GeometryReader { geo in
+        GeometryReader { geo in
+            let dotsReserve: CGFloat = 30
+            let pageHeight = max(0, geo.size.height - dotsReserve)
+            let pageSize = CGSize(width: geo.size.width, height: pageHeight)
+            let perPage = computePerPage(in: pageSize)
+            let pages = paginate(visibleSlots, by: perPage)
+
+            VStack(spacing: 0) {
                 ScrollView(.horizontal) {
                     HStack(spacing: 0) {
                         ForEach(pages.indices, id: \.self) { idx in
                             pageGrid(slots: pages[idx])
-                                .frame(width: geo.size.width, height: geo.size.height)
+                                .frame(width: pageSize.width, height: pageHeight)
                                 .id(idx)
                         }
                     }
@@ -271,18 +294,43 @@ struct GridView: View {
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.paging)
                 .scrollPosition(id: $currentPageID)
-            }
+                .frame(height: pageHeight)
 
-            if pages.count > 1 {
-                HStack(spacing: 8) {
-                    ForEach(pages.indices, id: \.self) { idx in
-                        Circle()
-                            .fill((currentPageID ?? 0) == idx ? Color.primary.opacity(0.85) : Color.primary.opacity(0.25))
-                            .frame(width: 7, height: 7)
+                if pages.count > 1 {
+                    HStack(spacing: 8) {
+                        ForEach(pages.indices, id: \.self) { idx in
+                            Circle()
+                                .fill((currentPageID ?? 0) == idx ? Color.primary.opacity(0.85) : Color.primary.opacity(0.25))
+                                .frame(width: 7, height: 7)
+                        }
                     }
+                    .frame(height: dotsReserve)
                 }
-                .padding(.bottom, 14)
             }
+            // Keep @State perPage in sync so the arrow-key monitor (outside
+            // SwiftUI body) reads the current value.
+            .onAppear { pagedTilesPerPage = perPage }
+            .onChange(of: perPage) { _, new in pagedTilesPerPage = new }
+        }
+    }
+
+    /// Adaptive tile-per-page count: max columns × max rows that fit in the
+    /// page area, given the user's icon size and our internal padding.
+    /// Replaces the previous hardcoded 35 — pages now fill the screen.
+    private func computePerPage(in size: CGSize) -> Int {
+        let tileWidth = iconSize + 32 + columnSpacing
+        let tileHeight = iconSize + 28 + rowSpacing  // icon + label + spacing
+        let usableW = max(0, size.width - 120)       // pageGrid's horizontal padding
+        let usableH = max(0, size.height - 60)       // pageGrid's vertical padding
+        let cols = max(1, Int(usableW / tileWidth))
+        let rows = max(1, Int(usableH / tileHeight))
+        return max(1, cols * rows)
+    }
+
+    private func paginate(_ slots: [DisplaySlot], by perPage: Int) -> [[DisplaySlot]] {
+        guard perPage > 0, !slots.isEmpty else { return [slots] }
+        return stride(from: 0, to: slots.count, by: perPage).map { start in
+            Array(slots[start..<min(start + perPage, slots.count)])
         }
     }
 
@@ -298,13 +346,6 @@ struct GridView: View {
         .padding(.horizontal, 60)
         .padding(.vertical, 30)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private func paginated(_ slots: [DisplaySlot]) -> [[DisplaySlot]] {
-        guard tilesPerPage > 0, !slots.isEmpty else { return [slots] }
-        return stride(from: 0, to: slots.count, by: tilesPerPage).map { start in
-            Array(slots[start..<min(start + tilesPerPage, slots.count)])
-        }
     }
 
     @ViewBuilder
@@ -694,5 +735,69 @@ struct GridView: View {
     private func cancelRename() {
         renamingItem = nil
         Task { await restoreSearchFocus() }
+    }
+
+    // MARK: Paged-layout arrow-key navigation
+
+    /// Install a local NSEvent monitor that turns ←/→ into page navigation
+    /// when we're in paged mode with an empty query and no modal up.
+    /// AppKit-level interception is necessary because the search TextField
+    /// consumes arrow keys for cursor movement, beating any SwiftUI
+    /// `.onKeyPress` we'd place at the parent level.
+    private func installArrowKeyMonitor() {
+        arrowKeyMonitor.install { specialKey in
+            // Only intercept when paged apps mode is actually active and no
+            // modal / search context wants the keys.
+            guard self.mode == .apps,
+                  !self.prefs.verticalScroll,
+                  self.trimmedQuery.isEmpty,
+                  self.renamingItem == nil,
+                  self.openFolderID == nil,
+                  self.uninstallSet == nil,
+                  self.uninstallError == nil
+            else { return false }
+
+            switch specialKey {
+            case .leftArrow:
+                let current = self.currentPageID ?? 0
+                if current > 0 { self.currentPageID = current - 1 }
+                return true
+            case .rightArrow:
+                let pageCount = max(
+                    1,
+                    Int(ceil(Double(self.visibleSlots.count) / Double(max(1, self.pagedTilesPerPage))))
+                )
+                let current = self.currentPageID ?? 0
+                if current < pageCount - 1 { self.currentPageID = current + 1 }
+                return true
+            default:
+                return false
+            }
+        }
+    }
+}
+
+/// Boxes the opaque token from `NSEvent.addLocalMonitorForEvents`. Hands the
+/// handler only `NSEvent.SpecialKey?` (Sendable) instead of the raw NSEvent,
+/// dodging Swift 6's "NSEvent isn't Sendable" rule for cross-isolation calls.
+/// The handler returns true to swallow the keypress, false to pass it through.
+@MainActor
+final class ArrowKeyMonitorBox {
+    private var token: Any?
+
+    func install(handler: @escaping @MainActor (NSEvent.SpecialKey?) -> Bool) {
+        uninstall()
+        token = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event -> NSEvent? in
+            // Unwrap the Sendable bits on this side of the boundary, then
+            // call into the main-actor handler with just those.
+            let special = event.specialKey
+            let swallow = MainActor.assumeIsolated { handler(special) }
+            return swallow ? nil : event
+        }
+    }
+
+    func uninstall() {
+        if let token { NSEvent.removeMonitor(token) }
+        token = nil
     }
 }

@@ -86,9 +86,11 @@ struct HotKeyRecorder: View {
         monitor.stop()
         isRecording = false
         // Re-install the persisted binding so we don't leave the user with
-        // no hotkey after a cancel.
+        // no hotkey after a cancel. Use AppDelegate.shared rather than
+        // NSApp.delegate cast — SwiftUI's lifecycle may have replaced
+        // NSApp.delegate after our manual assignment in MosaicApp.init.
         let saved = layout.state.summonHotKey
-        if let appDel = NSApp.delegate as? AppDelegate {
+        if let appDel = AppDelegate.shared {
             _ = appDel.applyHotKey(saved)
         }
     }
@@ -127,7 +129,9 @@ struct HotKeyRecorder: View {
     /// On failure (Carbon refused), the previous binding is still active —
     /// HotKeyManager's try-then-swap guarantees we don't end up with nothing.
     private func apply(_ binding: HotKeyBinding) {
-        guard let appDel = NSApp.delegate as? AppDelegate else {
+        // Use AppDelegate.shared — NSApp.delegate may have been replaced by
+        // SwiftUI's own delegate during App init.
+        guard let appDel = AppDelegate.shared else {
             lastError = "Internal error: AppDelegate unavailable."
             return
         }

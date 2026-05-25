@@ -4,18 +4,45 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var overlay: OverlayWindow?
-    private var statusItem: NSStatusItem?
+    /// Globally accessible reference to the live AppDelegate instance.
+    /// SwiftUI's lifecycle may replace `NSApp.delegate` after our manual
+    /// assignment in `MosaicApp.init`, so anything that previously cast
+    /// `NSApp.delegate as? AppDelegate` should go through this static
+    /// instead. Set in `init`, lives as long as MosaicApp's stored property
+    /// holds the strong reference.
+    static private(set) weak var shared: AppDelegate?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    private var overlay: OverlayWindow?
+    private var setupComplete = false
+
+    override init() {
+        super.init()
+        Self.shared = self
+    }
+
+    /// Run the launch sequence (overlay, hotkey, triggers, observers).
+    /// Idempotent — safe to call from both `MosaicApp.init` AND
+    /// `applicationDidFinishLaunching`. We call from App.init because
+    /// SwiftUI's lifecycle with only MenuBarExtra + Settings scenes on
+    /// macOS 26 fails to deliver applicationDidFinishLaunching reliably.
+    func setup() {
+        guard !setupComplete else { return }
+        setupComplete = true
+
         // LSUIElement=YES already implies .accessory; explicit for clarity.
         NSApp.setActivationPolicy(.accessory)
 
-        installStatusItem()
+        // Menu bar item is declared in MosaicApp via MenuBarExtra so it can
+        // host a SettingsLink — see MosaicApp.swift.
+
         installOverlay()
         installHotKey()
         installTriggers()
         observeAppActivation()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        setup()
     }
 
     // MARK: Triggers (hot corner, pinch)
@@ -100,62 +127,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         LayoutStore.shared.setSummonHotKey(binding)
         return nil
-    }
-
-    // MARK: Status item
-
-    private func installStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = item.button {
-            // Menu-bar glyph: custom template image from the asset catalog.
-            // Contents.json marks the imageset as template-rendering-intent,
-            // so the system auto-inverts for light/dark menu bars.
-            let image = NSImage(named: "MenuBarIcon")
-            image?.accessibilityDescription = "Mosaic"
-            button.image = image
-        }
-
-        let menu = NSMenu()
-
-        let showItem = NSMenuItem(
-            title: "Show Mosaic",
-            action: #selector(menuShow),
-            keyEquivalent: ""
-        )
-        showItem.target = self
-        menu.addItem(showItem)
-
-        menu.addItem(.separator())
-
-        let settingsItem = NSMenuItem(
-            title: "Settings…",
-            action: #selector(openSettings),
-            keyEquivalent: ","
-        )
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-
-        menu.addItem(.separator())
-
-        menu.addItem(NSMenuItem(
-            title: "Quit Mosaic",
-            action: #selector(NSApplication.terminate(_:)),
-            keyEquivalent: "q"
-        ))
-
-        item.menu = menu
-        statusItem = item
-    }
-
-    @objc private func menuShow() {
-        toggleOverlay()
-    }
-
-    @objc private func openSettings() {
-        // Bring the agent app to the foreground so its Settings window can
-        // become key, then send the standard SwiftUI Settings selector.
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     // MARK: Lifecycle
