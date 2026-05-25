@@ -45,6 +45,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setup()
     }
 
+    /// Fires when the user clicks Mosaic's pinned Dock icon (or re-opens the
+    /// .app while a copy is already running). We treat it as a summon — same
+    /// effect as the hotkey. Returning false tells AppKit we've handled it
+    /// so it doesn't try its default re-open behavior (which is a no-op
+    /// for LSUIElement apps anyway).
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        toggleOverlay()
+        return false
+    }
+
     // MARK: Triggers (hot corner)
 
     private func installTriggers() {
